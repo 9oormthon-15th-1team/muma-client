@@ -14,5 +14,10 @@ export default defineConfig({
     hmr: {
       port: 5175,
     },
+    // Vite 6는 dev 서버로의 cross-origin 요청을 기본 차단한다.
+    // 확장 프로그램(chrome-extension://)이 @vite/env·HMR 스크립트를 받도록 허용.
+    cors: {
+      origin: [/^chrome-extension:\/\//],
+    },
   },
 })
