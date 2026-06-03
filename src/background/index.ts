@@ -1,5 +1,10 @@
-import { uploadMelonTracks } from '../lib/melonUpload'
-import type { UploadMelonTracksRequest, UploadMelonTracksResponse } from '../lib/types'
+import { uploadMelonTracks, exportToSpotify } from '../lib/melonUpload'
+import type {
+  ExportToSpotifyRequest,
+  ExportToSpotifyResponse,
+  UploadMelonTracksRequest,
+  UploadMelonTracksResponse,
+} from '../lib/types'
 import { login, getStoredTokens, clearTokens, getValidAccessToken } from '../spotify/auth'
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -30,6 +35,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((err: unknown) => {
         console.error('[muma] upload:failed', err)
         const response: UploadMelonTracksResponse = {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }
+        sendResponse(response)
+      })
+    return true
+  }
+
+  if (message?.type === 'EXPORT_TO_SPOTIFY') {
+    const { payload } = message as ExportToSpotifyRequest
+    getValidAccessToken()
+      .then((token) => exportToSpotify(token, payload))
+      .then(() => {
+        console.info('[muma] export:success', payload.playlist_name)
+        const response: ExportToSpotifyResponse = { ok: true }
+        sendResponse(response)
+      })
+      .catch((err: unknown) => {
+        console.error('[muma] export:failed', err)
+        const response: ExportToSpotifyResponse = {
           ok: false,
           error: err instanceof Error ? err.message : String(err),
         }
