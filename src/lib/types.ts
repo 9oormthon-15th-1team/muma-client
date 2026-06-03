@@ -59,10 +59,13 @@ export interface MelonSessionResult {
 /** 팝업 → 콘텐츠 스크립트 */
 export interface CheckMelonSessionRequest {
   type: 'CHECK_MELON_SESSION'
+  /** 팝업이 chrome.cookies(MLCP)에서 확보한 memberKey. 페이지 무관하게 본인 목록 조회에 사용 */
+  memberKey?: string
 }
 
 export interface ExtractAllRequest {
   type: 'EXTRACT_ALL'
+  memberKey?: string
 }
 
 export type ContentRequest = CheckMelonSessionRequest | ExtractAllRequest

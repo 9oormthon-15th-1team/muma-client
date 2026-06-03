@@ -16,7 +16,7 @@ chrome.runtime.onMessage.addListener(
         href: location.href,
         readyState: document.readyState,
       })
-      checkMelonSession()
+      checkMelonSession(msg.memberKey)
         .then((result) => sendResponse({ ok: true, result }))
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err)
@@ -31,7 +31,7 @@ chrome.runtime.onMessage.addListener(
       href: location.href,
       readyState: document.readyState,
     })
-    extractAll()
+    extractAll(msg.memberKey)
       .then((result) => {
         console.info('[muma] EXTRACT_ALL completed', {
           playlistCount: result.playlists.length,
