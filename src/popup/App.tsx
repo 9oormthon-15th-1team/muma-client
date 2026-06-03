@@ -6,6 +6,7 @@ import type {
   ExtractResult,
   MelonSessionResult,
   MelonTrackResult,
+  Playlist,
   SpotifyTrack,
 } from '../lib/types'
 import { mapExtractResultToMelonTracks, uploadMelonTracks } from '../lib/melonUpload'
@@ -56,6 +57,11 @@ interface SpotifyPreviewPanelProps {
   onClearSelection: (playlistId: string, songId: string) => void
   onExportAll: () => void
   onSelectTrack: (playlistId: string, songId: string, trackId: string) => void
+}
+
+// 추출 곡 선택 키: 같은 곡이 여러 플레이리스트에 있을 수 있어 플레이리스트 스코프로 구분한다.
+function songSelectionKey(playlistSeq: string, songId: string): string {
+  return `${playlistSeq}:${songId}`
 }
 
 function smallestAlbumImage(track: SpotifyTrack): string | null {
@@ -216,6 +222,8 @@ export function App() {
   const [result, setResult] = useState<ExtractResult | null>(null)
   // 추출된 플레이리스트 중 preview 요청 대상으로 선택된 seq 집합
   const [selectedPlaylists, setSelectedPlaylists] = useState<Set<string>>(new Set())
+  // 선택된 곡: `${playlist_seq}:${songId}` 집합 (플레이리스트 스코프)
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set())
   const [memberKey, setMemberKey] = useState<string | null>(null)
 
   // Spotify 매칭 미리보기 / 선택 / 내보내기
@@ -293,6 +301,7 @@ export function App() {
     setUploadError(null)
     setResult(null)
     setSelectedPlaylists(new Set())
+    setSelectedSongs(new Set())
     setPreview(null)
     setSelected({})
     setExportStatuses({})
@@ -309,8 +318,15 @@ export function App() {
       })) as ExtractAllResponse
       if (res.ok) {
         setResult(res.result)
-        // 기본값: 추출된 플레이리스트 전부 선택
+        // 기본값: 추출된 플레이리스트 + 곡 전부 선택
         setSelectedPlaylists(new Set(res.result.playlists.map((pl) => pl.seq)))
+        setSelectedSongs(
+          new Set(
+            res.result.playlists.flatMap((pl) =>
+              pl.songs.map((s) => songSelectionKey(pl.seq, s.songId)),
+            ),
+          ),
+        )
         setSession({ status: 'LOGGED_IN', playlistCount: res.result.playlists.length })
       } else if (res.error === 'NOT_LOGGED_IN') {
         setError('멜론에 로그인 후 다시 시도해주세요.')
@@ -344,16 +360,16 @@ export function App() {
   }
 
   async function handleUpload() {
-    if (!result || selectedPlaylists.size === 0) return
+    if (!result || chosenPlaylists.length === 0) return
     setUploading(true)
     setUploadError(null)
     setPreview(null)
     setSelected({})
     setExportStatuses({})
     try {
-      // 선택한 플레이리스트별로 preview를 클라이언트에서 병렬 요청하고 결과를 병합한다.
+      // 선택한 플레이리스트의 선택한 곡만 preview를 클라이언트에서 병렬 요청하고 결과를 병합한다.
       // 한 플레이리스트가 실패해도 나머지는 표시(부분 성공).
-      const chosen = selectedPlaylistList
+      const chosen = chosenPlaylists
       const settled = await Promise.allSettled(
         chosen.map((pl) =>
           uploadMelonTracks(
@@ -376,6 +392,15 @@ export function App() {
         setUploadError(reason instanceof Error ? reason.message : String(reason ?? '매칭 결과가 없습니다.'))
       } else {
         setPreview(merged)
+        // 기본값: 후보가 2개 이상인 곡은 첫 번째 후보를 선택해 둔다.
+        const defaultSelected: Record<string, string> = {}
+        for (const row of merged) {
+          if (row.results.length >= 2) {
+            defaultSelected[spotifySelectionKey(row.playlist_id, row.melon_song_id)] =
+              row.results[0].id
+          }
+        }
+        setSelected(defaultSelected)
         if (failedCount > 0) {
           setUploadError(`${failedCount}개 플레이리스트 매칭 실패 (성공분만 표시)`)
         }
@@ -412,6 +437,32 @@ export function App() {
         ? new Set()
         : new Set(result.playlists.map((pl) => pl.seq)),
     )
+  }
+
+  function toggleSong(playlistSeq: string, songId: string) {
+    resetPreviewState()
+    setSelectedSongs((prev) => {
+      const key = songSelectionKey(playlistSeq, songId)
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  // 해당 플레이리스트의 곡 전체 선택/해제 토글
+  function toggleAllSongs(pl: Playlist) {
+    resetPreviewState()
+    setSelectedSongs((prev) => {
+      const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
+      const allOn = keys.every((k) => prev.has(k))
+      const next = new Set(prev)
+      for (const k of keys) {
+        if (allOn) next.delete(k)
+        else next.add(k)
+      }
+      return next
+    })
   }
 
   function selectTrack(playlistId: string, songId: string, trackId: string) {
@@ -520,6 +571,14 @@ export function App() {
   // 선택된 플레이리스트(추출 순서 유지) 및 플레이리스트별 그룹화된 preview
   const selectedPlaylistList =
     result?.playlists.filter((playlist) => selectedPlaylists.has(playlist.seq)) ?? []
+  // 선택 플레이리스트 × 선택 곡만 남긴 실제 요청 대상
+  const chosenPlaylists = selectedPlaylistList
+    .map((pl) => ({
+      ...pl,
+      songs: pl.songs.filter((s) => selectedSongs.has(songSelectionKey(pl.seq, s.songId))),
+    }))
+    .filter((pl) => pl.songs.length > 0)
+  const effectiveSongCount = chosenPlaylists.reduce((sum, pl) => sum + pl.songs.length, 0)
   const previewGroups: PlaylistPreviewGroup[] =
     preview && selectedPlaylistList.length > 0
       ? groupPreviewByPlaylist(selectedPlaylistList, preview)
@@ -637,34 +696,63 @@ export function App() {
           </div>
           <button
             onClick={handleUpload}
-            disabled={uploading || selectedPlaylists.size === 0}
+            disabled={uploading || effectiveSongCount === 0}
             className={btn}
           >
-            {uploading ? '매칭 중...' : `선택 ${selectedPlaylists.size}개 매칭 미리보기`}
+            {uploading
+              ? '매칭 중...'
+              : `선택 ${selectedPlaylists.size}개 · ${effectiveSongCount}곡 매칭 미리보기`}
           </button>
           {uploadError && <p className="text-red-600">매칭 실패: {uploadError}</p>}
-          {result.playlists.map((pl) => (
-            <div key={pl.seq} className="mb-2 flex items-start gap-2">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={selectedPlaylists.has(pl.seq)}
-                onChange={() => togglePlaylist(pl.seq)}
-              />
-              <details className="flex-1">
-                <summary>
-                  {pl.title} ({pl.songCount}곡)
-                </summary>
-                <ol className="my-1 list-decimal pl-5">
-                  {pl.songs.map((s) => (
-                    <li key={s.songId}>
-                      {s.title} — {s.artist}
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            </div>
-          ))}
+          {result.playlists.map((pl) => {
+            const playlistOn = selectedPlaylists.has(pl.seq)
+            const selectedSongCount = pl.songs.filter((s) =>
+              selectedSongs.has(songSelectionKey(pl.seq, s.songId)),
+            ).length
+            const allSongsOn = pl.songs.length > 0 && selectedSongCount === pl.songs.length
+
+            return (
+              <div key={pl.seq} className="mb-2 flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={playlistOn}
+                  onChange={() => togglePlaylist(pl.seq)}
+                />
+                <details className="flex-1">
+                  <summary>
+                    {pl.title} ({selectedSongCount}/{pl.songCount}곡)
+                  </summary>
+                  {playlistOn && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAllSongs(pl)}
+                      className="mt-1 border-none bg-transparent p-0 text-[11px] text-gray-500 underline"
+                    >
+                      {allSongsOn ? '곡 전체 해제' : '곡 전체 선택'}
+                    </button>
+                  )}
+                  <ul className="my-1 list-none pl-1">
+                    {pl.songs.map((s) => (
+                      <li key={s.songId}>
+                        <label className="flex items-center gap-2 py-0.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={selectedSongs.has(songSelectionKey(pl.seq, s.songId))}
+                            disabled={!playlistOn}
+                            onChange={() => toggleSong(pl.seq, s.songId)}
+                          />
+                          <span className={playlistOn ? '' : 'text-gray-400'}>
+                            {s.title} — {s.artist}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )
+          })}
         </div>
       )}
 
