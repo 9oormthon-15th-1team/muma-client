@@ -1,5 +1,6 @@
 import { test, expect } from 'vitest'
 import { parseSongList } from './melonParser'
+import { parsePlaylistSeqs } from './melonParser'
 
 // 실제 listSong.htm 응답에서 발췌한 2곡 구조
 const FIXTURE = `
@@ -58,4 +59,29 @@ test('parseSongList: 곡 수와 각 필드를 추출한다', () => {
 
 test('parseSongList: 곡이 없으면 빈 배열', () => {
   expect(parseSongList('<div class="section_playlist"></div>')).toEqual([])
+})
+
+const LIST_FIXTURE = `
+<ul class="list_playlist">
+  <li>
+    <a href="/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=446121958">내 인생 플리</a>
+  </li>
+  <li>
+    <a href="/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=500000001">운동할 때</a>
+  </li>
+  <li>
+    <a href="/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=446121958">중복은 무시</a>
+  </li>
+</ul>`
+
+test('parsePlaylistSeqs: 중복 제거하고 seq+title 추출', () => {
+  const result = parsePlaylistSeqs(LIST_FIXTURE)
+  expect(result).toEqual([
+    { seq: '446121958', title: '내 인생 플리' },
+    { seq: '500000001', title: '운동할 때' },
+  ])
+})
+
+test('parsePlaylistSeqs: 항목 없으면 빈 배열', () => {
+  expect(parsePlaylistSeqs('<div></div>')).toEqual([])
 })

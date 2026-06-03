@@ -20,3 +20,26 @@ export function parseSongList(html: string): Song[] {
   }
   return songs
 }
+
+export interface PlaylistRef {
+  seq: string
+  title: string
+}
+
+export function parsePlaylistSeqs(html: string): PlaylistRef[] {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const anchors = Array.from(
+    doc.querySelectorAll('a[href*="mymusicplaylistview_inform.htm"]'),
+  ) as HTMLAnchorElement[]
+  const seen = new Set<string>()
+  const refs: PlaylistRef[] = []
+  for (const a of anchors) {
+    const match = a.getAttribute('href')?.match(/plylstSeq=(\d+)/)
+    if (!match) continue
+    const seq = match[1]
+    if (seen.has(seq)) continue
+    seen.add(seq)
+    refs.push({ seq, title: (a.textContent ?? '').trim() || seq })
+  }
+  return refs
+}
