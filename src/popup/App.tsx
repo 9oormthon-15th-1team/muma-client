@@ -14,6 +14,7 @@ export function App() {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       if (!tab?.id || !tab.url?.includes('melon.com')) {
         setError('melon.com 탭에서 실행해주세요.')
+        setLoading(false)
         return
       }
       const res = (await chrome.tabs.sendMessage(tab.id, {
