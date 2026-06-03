@@ -26,8 +26,9 @@ export async function fetchPlaylistListHtml(): Promise<string> {
 }
 
 export async function fetchSongListHtml(seq: string): Promise<string> {
-  const url = `/mymusic/playlist/mymusicplaylistview_listSong.htm?plylstSeq=${seq}`
-  const referrer = `${location.origin}/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=${seq}`
+  const enc = encodeURIComponent(seq)
+  const url = `/mymusic/playlist/mymusicplaylistview_listSong.htm?plylstSeq=${enc}`
+  const referrer = `${location.origin}/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=${enc}`
   return fetchText(url, referrer)
 }
 
