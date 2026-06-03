@@ -6,6 +6,8 @@ import pkg from './package.json'
 // 해시된 산출물 경로로 자동 치환해줍니다.
 export default defineManifest({
   manifest_version: 3,
+  // 모든 개발 환경에서 동일한 extension ID를 보장하기 위한 고정 키
+  key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4WqdO/4+ku7wX0MkuBxPmIjG4bxdHW1FxGcCj5/EVrOEeS9vJU3IYbrTb9HVoW1k8aSbH72CXqKwkF2UD2yRJKLWWUE3vkQQAqYKGNd4N9Xva2E85BLldJ61rJLuCIUNbPN5EPe4RjAjxJr7gXkUrD2EgWj8sjOUmtaHU09NsrFpjKm6tnrs4TaxAuGIKav+Suj8VjcOo2TmnWOM4CgdIEANSfSaoQm1f4a7P9jcZk/hDeK2eLj38ZTAeb0jKOb9tdOq04YxhLtWA4hjxO4LNd8K6U/Nuy2pR+E6QidS6mxxOh339mVyIWvwObYyaMhLWLTTb5i/HtxqnBFf3FA8rQIDAQAB',
   name: 'Muma Client',
   version: pkg.version,
   description: pkg.description,
