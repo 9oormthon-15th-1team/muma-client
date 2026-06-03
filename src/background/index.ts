@@ -1,19 +1,14 @@
-// 백그라운드 서비스 워커 (Manifest V3).
-// 확장 프로그램의 이벤트 허브 역할을 합니다. DOM 접근은 불가하며,
-// 메시지 라우팅 · 알람 · 스토리지 동기화 등 백그라운드 로직을 담당합니다.
 import { uploadMelonTracks } from '../lib/melonUpload'
 import type { UploadMelonTracksRequest, UploadMelonTracksResponse } from '../lib/types'
+import { login, getStoredTokens, clearTokens, getValidAccessToken } from '../spotify/auth'
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('[muma] 설치/업데이트:', details.reason)
-  // 최초 설치 시 기본값 세팅
-  if (details.reason === 'install') {
-    chrome.storage.local.set({ count: 0 })
-  }
 })
 
-// 콘텐츠 스크립트 ↔ 팝업 간 메시지 중계 예제
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  console.log('[background] message received:', message)
+
   if (message?.type === 'PING') {
     sendResponse({ type: 'PONG', at: Date.now() })
     return true
@@ -43,7 +38,40 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true
   }
 
-  // 비동기 응답을 쓰려면 true를 반환
+  if (message?.type === 'SPOTIFY_LOGIN') {
+    login()
+      .then((tokens) => {
+        console.log('[background] login success')
+        sendResponse({ success: true, accessToken: tokens.accessToken })
+      })
+      .catch((err: Error) => {
+        console.error('[background] login error:', err)
+        sendResponse({ success: false, error: err.message })
+      })
+    return true
+  }
+
+  if (message?.type === 'SPOTIFY_GET_TOKEN') {
+    getValidAccessToken()
+      .then((accessToken) => sendResponse({ success: true, accessToken }))
+      .catch((err: Error) => sendResponse({ success: false, error: err.message }))
+    return true
+  }
+
+  if (message?.type === 'SPOTIFY_STATUS') {
+    getStoredTokens()
+      .then((tokens) => sendResponse({ loggedIn: tokens !== null }))
+      .catch(() => sendResponse({ loggedIn: false }))
+    return true
+  }
+
+  if (message?.type === 'SPOTIFY_LOGOUT') {
+    clearTokens()
+      .then(() => sendResponse({ success: true }))
+      .catch((err: Error) => sendResponse({ success: false, error: err.message }))
+    return true
+  }
+
   return true
 })
 

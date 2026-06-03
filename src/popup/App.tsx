@@ -45,6 +45,11 @@ export function App() {
   const [result, setResult] = useState<ExtractResult | null>(null)
   const [memberKey, setMemberKey] = useState<string | null>(null)
 
+  // Spotify
+  const [spotifyLoggedIn, setSpotifyLoggedIn] = useState(false)
+  const [spotifyLoading, setSpotifyLoading] = useState(false)
+  const [spotifyError, setSpotifyError] = useState<string | null>(null)
+
   async function getActiveMelonTab() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
     if (!tab?.id || !tab.url?.includes('melon.com')) return null
@@ -95,6 +100,9 @@ export function App() {
 
   useEffect(() => {
     void checkSession()
+    chrome.runtime.sendMessage({ type: 'SPOTIFY_STATUS' }, (res) => {
+      if (res?.loggedIn) setSpotifyLoggedIn(true)
+    })
   }, [])
 
   async function handleExtract() {
@@ -172,15 +180,57 @@ export function App() {
     }
   }
 
+  const handleSpotifyLogin = () => {
+    setSpotifyLoading(true)
+    setSpotifyError(null)
+    chrome.runtime.sendMessage({ type: 'SPOTIFY_LOGIN' }, (res) => {
+      console.log('[popup] SPOTIFY_LOGIN response:', res)
+      setSpotifyLoading(false)
+      if (res?.success) {
+        setSpotifyLoggedIn(true)
+      } else {
+        setSpotifyError(res?.error ?? 'Login failed')
+      }
+    })
+  }
+
+  const handleSpotifyLogout = () => {
+    chrome.runtime.sendMessage({ type: 'SPOTIFY_LOGOUT' }, (res) => {
+      if (res?.success) {
+        setSpotifyLoggedIn(false)
+        setSpotifyError(null)
+      }
+    })
+  }
+
   return (
     <main style={{ width: 360, padding: 16, fontFamily: 'sans-serif' }}>
-      <h1 style={{ fontSize: 16, margin: '0 0 12px' }}>멜론 플레이리스트 추출</h1>
+      <h1 style={{ fontSize: 16, margin: '0 0 12px' }}>Muma</h1>
 
       {import.meta.env.DEV && (
         <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>
           [debug] memberKey(keyCookie): {memberKey ?? '없음(쿠키 미검출/로그아웃)'}
         </p>
       )}
+
+      {/* Spotify 연결 */}
+      <div style={{ marginBottom: 12, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
+        <strong>Spotify</strong>
+        {spotifyLoggedIn ? (
+          <span>
+            {' '}연결됨{' '}
+            <button onClick={handleSpotifyLogout} style={{ marginLeft: 4 }}>로그아웃</button>
+          </span>
+        ) : (
+          <span>
+            {' '}
+            <button onClick={handleSpotifyLogin} disabled={spotifyLoading}>
+              {spotifyLoading ? '로그인 중...' : '로그인'}
+            </button>
+          </span>
+        )}
+        {spotifyError && <p style={{ color: 'crimson', margin: '4px 0 0' }}>{spotifyError}</p>}
+      </div>
 
       {status === 'checking' && <p>멜론 로그인 상태 확인 중...</p>}
 
