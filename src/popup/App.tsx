@@ -45,7 +45,8 @@ interface SpotifyPreviewPanelProps {
   playlistName: string
   preview: MelonTrackResult[]
   selected: Record<string, string>
-  selectedCount: number
+  totalCount: number
+  autoIncludedCount: number
   spotifyLoggedIn: boolean
   onClearSelection: (songId: string) => void
   onExport: () => void
@@ -59,6 +60,22 @@ function smallestAlbumImage(track: SpotifyTrack): string | null {
   return [...images].sort((a, b) => a.width * a.height - b.width * b.height)[0].url
 }
 
+// 전송할 track id 목록을 곡 순서(position)대로 구성한다.
+// - 후보 1개: 그 1개를 자동 포함
+// - 후보 2개 이상: 사용자가 선택한 것만 포함(미선택 시 제외)
+// - 후보 0개: 제외
+function buildExportTrackIds(
+  preview: MelonTrackResult[],
+  selected: Record<string, string>,
+): string[] {
+  return [...preview]
+    .sort((a, b) => a.position - b.position)
+    .map((row) =>
+      row.results.length === 1 ? row.results[0].id : selected[row.melon_song_id],
+    )
+    .filter((id): id is string => Boolean(id))
+}
+
 function SpotifyPreviewPanel({
   btnClassName,
   exporting,
@@ -67,7 +84,8 @@ function SpotifyPreviewPanel({
   playlistName,
   preview,
   selected,
-  selectedCount,
+  totalCount,
+  autoIncludedCount,
   spotifyLoggedIn,
   onClearSelection,
   onExport,
@@ -82,6 +100,12 @@ function SpotifyPreviewPanel({
   return (
     <div className="mt-4 border-t border-gray-200 pt-3">
       <p className="m-0 mb-2 font-semibold">Spotify 후보 선택</p>
+
+      {autoIncludedCount > 0 && (
+        <p className="m-0 mb-2 text-xs text-gray-400">
+          후보가 1개인 {autoIncludedCount}곡은 자동으로 포함됩니다.
+        </p>
+      )}
 
       {ambiguousPreview.length === 0 ? (
         <p className="m-0 text-xs text-gray-400">선택이 필요한 곡이 없습니다.</p>
@@ -160,10 +184,10 @@ function SpotifyPreviewPanel({
 
       <button
         onClick={onExport}
-        disabled={exporting || !spotifyLoggedIn || !playlistName.trim() || selectedCount === 0}
+        disabled={exporting || !spotifyLoggedIn || !playlistName.trim() || totalCount === 0}
         className={`${btnClassName} mt-2`}
       >
-        {exporting ? '내보내는 중...' : `Spotify로 내보내기 (${selectedCount}곡)`}
+        {exporting ? '내보내는 중...' : `Spotify로 내보내기 (${totalCount}곡)`}
       </button>
       {exportError && <p className="text-red-600">내보내기 실패: {exportError}</p>}
       {exportSucceeded && <p className="text-green-600">Spotify 플레이리스트 생성 완료</p>}
@@ -350,11 +374,8 @@ export function App() {
 
   async function handleExport() {
     if (!preview) return
-    // 곡 순서(position)대로 선택된 track id를 모은다
-    const trackIds = [...preview]
-      .sort((a, b) => a.position - b.position)
-      .map((row) => selected[row.melon_song_id])
-      .filter((id): id is string => Boolean(id))
+    // 후보 1개는 자동 포함 + 후보 2개 이상은 사용자 선택분
+    const trackIds = buildExportTrackIds(preview, selected)
 
     if (trackIds.length === 0) return
 
@@ -404,7 +425,9 @@ export function App() {
 
   const btn =
     'cursor-pointer rounded-lg border-none bg-indigo-500 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-default disabled:opacity-50'
-  const selectedCount = Object.keys(selected).length
+  // 자동 포함(후보 1개) + 사용자 선택(후보 2개+) 합계
+  const exportCount = preview ? buildExportTrackIds(preview, selected).length : 0
+  const autoIncludedCount = preview?.filter((row) => row.results.length === 1).length ?? 0
 
   return (
     <main className="w-90 p-4 font-sans">
@@ -528,7 +551,8 @@ export function App() {
           playlistName={playlistName}
           preview={preview}
           selected={selected}
-          selectedCount={selectedCount}
+          totalCount={exportCount}
+          autoIncludedCount={autoIncludedCount}
           spotifyLoggedIn={spotifyLoggedIn}
           onClearSelection={clearSelection}
           onExport={handleExport}
