@@ -44,16 +44,38 @@ const FIXTURE = `
 test('parseSongList: 곡 수와 각 필드를 추출한다', () => {
   const songs = parseSongList(FIXTURE)
   expect(songs).toHaveLength(2)
-  expect(songs[0]).toEqual({
+  expect(songs[0]).toEqual(expect.objectContaining({
     songId: '1644933',
     trackNo: 1,
     title: '언젠가 이곳이',
     artist: '이수',
     album: "뮤지컬 대장금 OST '언젠가 이곳이'",
-  })
+    artistIds: '261143',
+    albumId: '352036',
+    songUrl: 'https://www.melon.com/song/detail.htm?songId=1644933',
+  }))
   expect(songs[1].songId).toBe('3801596')
   expect(songs[1].artist).toBe('XIA (준수)')
   expect(songs[1].album).toBe('Tarantallegra')
+})
+
+test('parseSongList: 멀티 아티스트는 "; ", artistIds는 ";"로 합친다', () => {
+  const multi = `
+  <table><tbody><tr>
+    <td><input type="checkbox" class="input_check" name="input_check" value="999" /></td>
+    <td class="no"><div class="wrap">1</div></td>
+    <td class="t_left"><a class="fc_gray">콜라보곡</a></td>
+    <td class="t_left"><div class="wrap wrapArtistName">
+      <a href="javascript:melon.link.goArtistDetail('111');" class="fc_mgray">아이유</a>
+      <a href="javascript:melon.link.goArtistDetail('222');" class="fc_mgray">박명수</a>
+    </div></td>
+    <td class="t_left"><div class="wrap">
+      <a href="javascript:melon.link.goAlbumDetail('333');" class="fc_mgray">콜라보앨범</a>
+    </div></td>
+  </tr></tbody></table>`
+  const [song] = parseSongList(multi)
+  expect(song.artist).toBe('아이유; 박명수')
+  expect(song.artistIds).toBe('111;222')
 })
 
 test('parseSongList: 곡이 없으면 빈 배열', () => {
@@ -78,6 +100,18 @@ test('parsePlaylistSeqs: 중복 제거하고 seq+title 추출', () => {
   expect(result).toEqual([
     { seq: '446121958', title: '내 인생 플리' },
     { seq: '500000001', title: '운동할 때' },
+  ])
+})
+
+test('parsePlaylistSeqs: 메인 목록 페이지의 범용 plylstSeq 패턴을 추출', () => {
+  const result = parsePlaylistSeqs(`
+    <button onclick="goPlaylist('plylstSeq=446121958')">열기</button>
+    <script>var next = { plylstSeq: '500000001' }</script>
+  `)
+
+  expect(result).toEqual([
+    { seq: '446121958', title: '446121958' },
+    { seq: '500000001', title: '500000001' },
   ])
 })
 

@@ -32,7 +32,7 @@ export default defineManifest({
   // 콘텐츠 스크립트: 매칭되는 웹페이지에 주입
   content_scripts: [
     {
-      matches: ['https://www.melon.com/*'],
+      matches: ['*://*.melon.com/*'],
       js: ['src/content/index.tsx'],
       run_at: 'document_idle',
     },

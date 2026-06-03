@@ -5,6 +5,7 @@ export function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ExtractResult | null>(null)
+  const [playlistSeq, setPlaylistSeq] = useState('')
 
   async function handleExtract() {
     setLoading(true)
@@ -19,6 +20,7 @@ export function App() {
       }
       const res = (await chrome.tabs.sendMessage(tab.id, {
         type: 'EXTRACT_ALL',
+        playlistSeq: playlistSeq.trim() || undefined,
       })) as ExtractAllResponse
       if (res.ok) {
         setResult(res.result)
@@ -48,6 +50,12 @@ export function App() {
       <button onClick={handleExtract} disabled={loading}>
         {loading ? '추출 중…' : '내 플레이리스트 전체 추출'}
       </button>
+      <input
+        value={playlistSeq}
+        onChange={(e) => setPlaylistSeq(e.target.value.replace(/\D/g, ''))}
+        placeholder="plylstSeq"
+        style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 8 }}
+      />
       {error && <p style={{ color: 'crimson' }}>{error}</p>}
       {result && (
         <div style={{ marginTop: 12 }}>

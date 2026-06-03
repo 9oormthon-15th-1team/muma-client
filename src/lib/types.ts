@@ -4,6 +4,10 @@ export interface Song {
   title: string
   artist: string
   album: string
+  artistIds?: string
+  albumId?: string
+  likes?: string
+  songUrl?: string
 }
 
 export interface Playlist {
@@ -21,6 +25,7 @@ export interface ExtractResult {
 /** 팝업 → 콘텐츠 스크립트 */
 export interface ExtractAllRequest {
   type: 'EXTRACT_ALL'
+  playlistSeq?: string
 }
 
 /** 콘텐츠 스크립트 → 팝업 */
