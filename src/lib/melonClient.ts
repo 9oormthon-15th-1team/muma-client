@@ -26,18 +26,21 @@ function getCookieValue(name: string): string {
 }
 
 /**
- * 로그인한 사용자의 memberKey를 멜론 `MLCP` 쿠키에서 추출한다.
- * 멜론 자신이 로그인 판별(isMelonLogin)에 쓰는 신호와 동일하며, 쿠키이므로
- * 메인/마이뮤직 등 어떤 멜론 페이지에서도 동일하게 동작한다(페이지 HTML 의존 없음).
+ * 멜론 `MLCP` 쿠키 값(Base64)에서 memberKey(첫 필드)를 디코드한다. 순수 함수라
+ * 콘텐츠 스크립트(document.cookie)·팝업(chrome.cookies) 양쪽에서 재사용한다.
  *
  * MLCP = Base64( "memberKey;memberId;memberDjYn;...;cookieLoginType" ). 표준 base64라 atob로 디코드.
- * 로그인하지 않았으면 MLCP 쿠키가 없으므로 null.
  */
-export function getMemberKeyFromCookie(): string | null {
-  const raw = getCookieValue('MLCP')
-  if (!raw) return null
+export function memberKeyFromMlcp(rawCookieValue: string | null | undefined): string | null {
+  if (!rawCookieValue) return null
   try {
-    const base64 = raw.replace(/[^A-Za-z0-9+/=]/g, '')
+    let value = rawCookieValue
+    try {
+      value = decodeURIComponent(rawCookieValue)
+    } catch {
+      // 이미 디코드된 값이면 그대로 사용
+    }
+    const base64 = value.replace(/[^A-Za-z0-9+/=]/g, '')
     const memberKey = atob(base64).split(';')[0]?.trim()
     return memberKey && /^\d+$/.test(memberKey) ? memberKey : null
   } catch {
@@ -45,9 +48,21 @@ export function getMemberKeyFromCookie(): string | null {
   }
 }
 
-function getPlaylistListUrlCandidates(): string[] {
+/**
+ * 로그인한 사용자의 memberKey를 현재 문서의 쿠키에서 추출한다(콘텐츠 스크립트용).
+ * 멜론은 로그인 시 memberKey를 `keyCookie` 쿠키에 평문 숫자로 저장한다(우선 사용).
+ * 폴백으로 `MLCP`(base64) 첫 필드를 디코드한다. 로그아웃이면 둘 다 없으므로 null.
+ */
+export function getMemberKeyFromCookie(): string | null {
+  const direct = getCookieValue('keyCookie').trim()
+  if (/^\d+$/.test(direct)) return direct
+  return memberKeyFromMlcp(getCookieValue('MLCP'))
+}
+
+function getPlaylistListUrlCandidates(memberKeyArg?: string): string[] {
   const memberKey =
-    getMemberKeyFromCookie() ?? // 공용 신호: 어떤 페이지에서도 동작
+    memberKeyArg ?? // 팝업에서 chrome.cookies로 확보한 memberKey (가장 신뢰)
+    getMemberKeyFromCookie() ?? // 콘텐츠 스크립트 document.cookie
     new URLSearchParams(location.search).get('memberKey') ??
     document.documentElement.outerHTML.match(/memberKey=(\d+)/)?.[1] ??
     undefined
@@ -58,8 +73,6 @@ function getPlaylistListUrlCandidates(): string[] {
     location.pathname === PLAYLIST_LIST_PATH ? currentPath : '',
     // 검출한 memberKey로 본인 목록 조회 (확인된 동작 URL)
     memberKey ? `${PLAYLIST_LIST_PATH}?memberKey=${memberKey}` : '',
-    // memberKey 미검출 시 로그인 세션 기반 본인 목록
-    PLAYLIST_LIST_PATH,
   ])
 }
 
@@ -120,8 +133,8 @@ export function classifyMelonSessionHtml(finalUrl: string, html: string): MelonS
   return 'LOGGED_IN'
 }
 
-export async function fetchPlaylistListHtml(): Promise<string> {
-  const candidates = getPlaylistListUrlCandidates()
+export async function fetchPlaylistListHtml(memberKey?: string): Promise<string> {
+  const candidates = getPlaylistListUrlCandidates(memberKey)
   console.info('[muma] playlist:list:candidates', {
     href: location.href,
     candidates,
@@ -140,42 +153,37 @@ export async function fetchPlaylistListHtml(): Promise<string> {
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
-export async function checkMelonSession(): Promise<MelonSessionResult> {
-  // 로그인 신호를 여러 경로로 시도한다(견고성):
-  //  1) MLCP 쿠키의 memberKey → 메인 등 어떤 페이지에서도 동작 (1순위, getPlaylistListUrlCandidates 내부)
-  //  2) 현재 페이지/URL의 memberKey (마이뮤직 페이지)
-  //  3) bare 세션 URL → 로그아웃이면 예외 페이지로 리다이렉트
-  // 쿠키 디코드가 실패해도 2)·3)으로 폴백되어 로그인 검증이 사라지지 않는다.
-  const candidates = getPlaylistListUrlCandidates()
-  console.info('[muma] session:candidates', {
-    href: location.href,
-    cookieMemberKey: getMemberKeyFromCookie(),
-    candidates,
-  })
-
-  let lastError = ''
-  for (const url of candidates) {
-    try {
-      const { finalUrl, html, ok, status } = await fetchTextRaw(url)
-      if (!ok) {
-        lastError = `HTTP ${status}`
-        continue
-      }
-      if (classifyMelonSessionHtml(finalUrl, html) === 'LOGGED_OUT') {
-        return { status: 'LOGGED_OUT' }
-      }
-      const refs = parsePlaylistSeqs(html)
-      if (refs.length === 0) {
-        return { status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 }
-      }
-      return { status: 'LOGGED_IN', playlistCount: refs.length }
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
-      console.warn('[muma] session:candidate failed', { url, err })
-    }
+export async function checkMelonSession(memberKey?: string): Promise<MelonSessionResult> {
+  // 로그인 진위 = MLCP 쿠키의 memberKey 존재. (팝업이 chrome.cookies로 확보해 전달하거나,
+  // 콘텐츠 스크립트 document.cookie에서 직접 확보) memberKey가 없으면 로그아웃.
+  // memberKey 없는 bare URL은 로그인 상태에서도 NOTEXIST 예외로 빠지므로 사용하지 않는다.
+  const key = memberKey ?? getMemberKeyFromCookie()
+  console.info('[muma] session:check', { href: location.href, memberKey: key })
+  if (!key) {
+    return { status: 'LOGGED_OUT' }
   }
 
-  return { status: 'UNKNOWN', error: lastError || '세션 확인 실패' }
+  // 로그인 확인됨 → 본인 memberKey로 플레이리스트 개수 조회
+  try {
+    const { finalUrl, html, ok } = await fetchTextRaw(
+      `${PLAYLIST_LIST_PATH}?memberKey=${encodeURIComponent(key)}`,
+    )
+    if (!ok) {
+      // 로그인은 됐으나 목록 조회 실패 → 로그아웃으로 오인하지 않음
+      return { status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 }
+    }
+    if (classifyMelonSessionHtml(finalUrl, html) === 'LOGGED_OUT') {
+      return { status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 }
+    }
+    const refs = parsePlaylistSeqs(html)
+    return refs.length > 0
+      ? { status: 'LOGGED_IN', playlistCount: refs.length }
+      : { status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 }
+  } catch (err) {
+    console.warn('[muma] session:check failed', err)
+    // 네트워크 오류 등 — 로그인 자체는 쿠키로 확인됨
+    return { status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 }
+  }
 }
 
 export async function fetchSongListHtml(seq: string): Promise<string> {
@@ -218,8 +226,8 @@ export async function fetchPlaylistSongs(seq: string) {
   return songs
 }
 
-export async function extractAll(): Promise<ExtractResult> {
-  const refs = parsePlaylistSeqs(await fetchPlaylistListHtml())
+export async function extractAll(memberKey?: string): Promise<ExtractResult> {
+  const refs = parsePlaylistSeqs(await fetchPlaylistListHtml(memberKey))
 
   console.info('[muma] playlist:list:parsed', {
     count: refs.length,

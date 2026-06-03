@@ -7,6 +7,24 @@ import type {
   UploadMelonTracksResponse,
 } from '../lib/types'
 import { mapExtractResultToMelonTracks } from '../lib/melonUpload'
+import { memberKeyFromMlcp } from '../lib/melonClient'
+
+const MELON_PLAYLIST_LIST_URL = 'https://www.melon.com/mymusic/playlist/mymusicplaylist_list.htm'
+
+// 멜론 로그인 사용자의 memberKey를 쿠키에서 읽는다(팝업 전용, 페이지 무관).
+// 멜론은 memberKey를 `keyCookie` 쿠키에 평문 숫자로 저장한다(우선). 없으면 MLCP(base64) 폴백.
+async function readMelonMemberKey(): Promise<string | null> {
+  const url = 'https://www.melon.com'
+  try {
+    const direct = await chrome.cookies.get({ url, name: 'keyCookie' })
+    const v = direct?.value?.trim()
+    if (v && /^\d+$/.test(v)) return v
+    const mlcp = await chrome.cookies.get({ url, name: 'MLCP' })
+    return memberKeyFromMlcp(mlcp?.value)
+  } catch {
+    return null
+  }
+}
 
 // 멜론 실제 로그인 페이지(accounts.melon.com). 로그인 후 플레이리스트 목록으로 복귀시켜
 // 콘텐츠 스크립트가 해당 탭에서 동작하도록 한다.
@@ -25,6 +43,7 @@ export function App() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSucceeded, setUploadSucceeded] = useState(false)
   const [result, setResult] = useState<ExtractResult | null>(null)
+  const [memberKey, setMemberKey] = useState<string | null>(null)
 
   async function getActiveMelonTab() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -37,27 +56,40 @@ export function App() {
     setError(null)
     setSession(null)
     try {
-      const tab = await getActiveMelonTab()
-      if (!tab?.id) {
-        setStatus('not_melon')
+      // 로그인 진위는 멜론 MLCP 쿠키로 판단(페이지 무관, 콘텐츠 스크립트 불필요)
+      const key = await readMelonMemberKey()
+      console.info('[muma] popup memberKey(keyCookie/MLCP):', key)
+      setMemberKey(key)
+      if (!key) {
+        setSession({ status: 'LOGGED_OUT' })
+        setStatus('ready')
         return
       }
 
-      const res = (await chrome.tabs.sendMessage(tab.id, {
-        type: 'CHECK_MELON_SESSION',
-      })) as CheckMelonSessionResponse
-
-      if (res.ok) {
-        setSession(res.result)
+      // 로그인 확인됨. 플레이리스트 개수는 콘텐츠 스크립트로 best-effort 조회.
+      const tab = await getActiveMelonTab()
+      if (!tab?.id) {
+        // 멜론 탭이 활성화돼 있지 않아도 로그인은 확인됨(추출은 멜론 탭에서)
+        setSession({ status: 'LOGGED_IN' })
         setStatus('ready')
-      } else {
-        setError(res.error)
-        setStatus('error')
+        return
       }
+      try {
+        const res = (await chrome.tabs.sendMessage(tab.id, {
+          type: 'CHECK_MELON_SESSION',
+          memberKey: key,
+        })) as CheckMelonSessionResponse
+        // 로그인은 쿠키로 확정됐으므로, 콘텐츠 응답은 개수 보강용으로만 사용
+        setSession(res.ok ? res.result : { status: 'LOGGED_IN' })
+      } catch {
+        // 콘텐츠 스크립트 미주입 등 — 로그인 자체는 확인됨
+        setSession({ status: 'LOGGED_IN' })
+      }
+      setStatus('ready')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setError(msg)
-      setStatus(msg.includes('Receiving end does not exist') ? 'content_not_ready' : 'error')
+      setStatus('error')
     }
   }
 
@@ -80,6 +112,7 @@ export function App() {
       }
       const res = (await chrome.tabs.sendMessage(tab.id, {
         type: 'EXTRACT_ALL',
+        memberKey: memberKey ?? undefined,
       })) as ExtractAllResponse
       if (res.ok) {
         setResult(res.result)
@@ -110,6 +143,11 @@ export function App() {
     await chrome.tabs.create({ url: MELON_LOGIN_TARGET })
   }
 
+  async function openMyMusic() {
+    const url = memberKey ? `${MELON_PLAYLIST_LIST_URL}?memberKey=${memberKey}` : MELON_PLAYLIST_LIST_URL
+    await chrome.tabs.create({ url })
+  }
+
   async function handleUpload() {
     if (!result) return
     setUploading(true)
@@ -137,6 +175,12 @@ export function App() {
   return (
     <main style={{ width: 360, padding: 16, fontFamily: 'sans-serif' }}>
       <h1 style={{ fontSize: 16, margin: '0 0 12px' }}>멜론 플레이리스트 추출</h1>
+
+      {import.meta.env.DEV && (
+        <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>
+          [debug] memberKey(keyCookie): {memberKey ?? '없음(쿠키 미검출/로그아웃)'}
+        </p>
+      )}
 
       {status === 'checking' && <p>멜론 로그인 상태 확인 중...</p>}
 
@@ -166,14 +210,21 @@ export function App() {
 
       {status === 'ready' && session?.status === 'PLAYLIST_IDS_NOT_FOUND' && (
         <div>
-          <p>로그인은 확인됐지만 플레이리스트 목록을 찾지 못했습니다.</p>
-          <button onClick={checkSession}>다시 확인</button>
+          <p>로그인됨 — 플레이리스트를 불러오지 못했습니다. 내 플레이리스트 페이지에서 다시 시도해주세요.</p>
+          <button onClick={openMyMusic}>내 플레이리스트 열기</button>
+          <button onClick={checkSession} style={{ marginLeft: 8 }}>
+            다시 확인
+          </button>
         </div>
       )}
 
       {status === 'ready' && session?.status === 'LOGGED_IN' && (
         <div>
-          <p>플레이리스트 {session.playlistCount ?? 0}개를 찾았습니다.</p>
+          <p>
+            {typeof session.playlistCount === 'number'
+              ? `플레이리스트 ${session.playlistCount}개를 찾았습니다.`
+              : '로그인됨 — 추출을 눌러 플레이리스트를 가져오세요.'}
+          </p>
           <button onClick={handleExtract} disabled={loading}>
             {loading ? '추출 중...' : '내 플레이리스트 전체 추출'}
           </button>

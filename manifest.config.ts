@@ -44,6 +44,7 @@ export default defineManifest({
     128: 'icons/icon128.png',
   },
 
-  permissions: ['storage', 'activeTab'],
-  host_permissions: ['http://192.168.0.22:8080/*'],
+  // cookies: 팝업에서 멜론 MLCP 쿠키를 읽어 로그인/ memberKey를 페이지 무관하게 확인
+  permissions: ['storage', 'activeTab', 'cookies'],
+  host_permissions: ['http://192.168.0.22:8080/*', 'https://*.melon.com/*'],
 })

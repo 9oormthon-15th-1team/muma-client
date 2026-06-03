@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { classifyMelonSessionHtml, getMemberKeyFromCookie } from './melonClient'
+import { classifyMelonSessionHtml, getMemberKeyFromCookie, memberKeyFromMlcp } from './melonClient'
 
 describe('classifyMelonSessionHtml', () => {
   test('로그인 페이지 신호가 있으면 로그아웃으로 판정한다', () => {
@@ -58,5 +58,26 @@ describe('getMemberKeyFromCookie', () => {
   test('memberKey가 숫자가 아니면 null', () => {
     document.cookie = `MLCP=${btoa('notanumber;x')}; path=/`
     expect(getMemberKeyFromCookie()).toBeNull()
+  })
+})
+
+describe('memberKeyFromMlcp', () => {
+  test('빈 값/null이면 null', () => {
+    expect(memberKeyFromMlcp(null)).toBeNull()
+    expect(memberKeyFromMlcp('')).toBeNull()
+  })
+
+  test('Base64 첫 필드 memberKey를 추출한다', () => {
+    expect(memberKeyFromMlcp(btoa('57656107;id;N;;tok;;0;disp;0;loginId;1'))).toBe('57656107')
+  })
+
+  test('URL 인코딩된 쿠키 값도 디코드한다', () => {
+    // chrome.cookies가 percent-encoded 값을 줄 수 있음
+    const raw = encodeURIComponent(btoa('12345;id'))
+    expect(memberKeyFromMlcp(raw)).toBe('12345')
+  })
+
+  test('첫 필드가 숫자가 아니면 null', () => {
+    expect(memberKeyFromMlcp(btoa('abc;id'))).toBeNull()
   })
 })

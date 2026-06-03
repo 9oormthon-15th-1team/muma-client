@@ -62,6 +62,32 @@ describe('mapExtractResultToMelonTracks', () => {
       },
     ])
   })
+
+  test('artists_text는 세미콜론/콤마 구분자를 콤마 구분 문자열로 정규화한다', () => {
+    const mixedArtistResult: ExtractResult = {
+      extractedAt: '2026-06-03T00:00:00.000Z',
+      playlists: [
+        {
+          seq: '556969474',
+          title: '테스트',
+          songCount: 1,
+          songs: [
+            {
+              songId: '1',
+              trackNo: 1,
+              title: 'One Dream',
+              artist: '백현 (BAEKHYUN); 솔지; 소유 (SOYOU), 박규리',
+              album: 'One Dream One Korea',
+            },
+          ],
+        },
+      ],
+    }
+
+    expect(mapExtractResultToMelonTracks(mixedArtistResult)[0].artists_text).toBe(
+      '백현 (BAEKHYUN), 솔지, 소유 (SOYOU), 박규리',
+    )
+  })
 })
 
 describe('uploadMelonTracks', () => {
