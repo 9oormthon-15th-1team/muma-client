@@ -64,24 +64,40 @@ export interface PlaylistRef {
 
 export function parsePlaylistSeqs(html: string): PlaylistRef[] {
   const doc = new DOMParser().parseFromString(html, 'text/html')
-  const anchors = Array.from(
-    doc.querySelectorAll('a[href*="plylstSeq"]'),
-  ) as HTMLAnchorElement[]
   const seen = new Set<string>()
   const refs: PlaylistRef[] = []
-  for (const a of anchors) {
-    const match = a.getAttribute('href')?.match(/plylstSeq=(\d+)/)
-    if (!match) continue
-    const seq = match[1]
-    if (seen.has(seq)) continue
+  const add = (seq: string | undefined, title: string) => {
+    if (!seq || seen.has(seq)) return
     seen.add(seq)
-    refs.push({ seq, title: (a.textContent ?? '').trim() || seq })
+    refs.push({ seq, title: title.trim() || seq })
   }
-  for (const match of html.matchAll(/plylstSeq\s*[=:]\s*['"]?(\d+)/g)) {
-    const seq = match[1]
-    if (seen.has(seq)) continue
-    seen.add(seq)
-    refs.push({ seq, title: seq })
+
+  // 1) 내 플레이리스트 목록 페이지: goPlaylistDetail(...,'<seq>') 앵커
+  //    예) javascript:mymusic.mymusicLink.goPlaylistDetail('0','Y','N','556971210');
+  for (const a of Array.from(doc.querySelectorAll('a[href*="goPlaylistDetail"]'))) {
+    const seq = a.getAttribute('href')?.match(/goPlaylistDetail\([^)]*?'(\d+)'\s*\)/)?.[1]
+    const title = clean(
+      a.getAttribute('title')?.replace(/\s*-\s*페이지 이동\s*$/, '') ?? a.textContent,
+    )
+    add(seq, title)
   }
+
+  // 2) inform 등 plylstSeq= 를 직접 가진 앵커
+  for (const a of Array.from(doc.querySelectorAll('a[href*="plylstSeq"]'))) {
+    const seq = a.getAttribute('href')?.match(/plylstSeq=(\d+)/)?.[1]
+    add(seq, clean(a.textContent))
+  }
+
+  // 3) 텍스트 폴백: onclick 핸들러 / 스크립트 내 seq (제목은 seq로 대체)
+  const textPatterns = [
+    /goPlaylistDetail\([^)]*?'(\d+)'\s*\)/g,
+    /playPlayList\('[^']*','(\d+)'/g,
+    /goBuyProductByPlylst\('(\d+)'/g,
+    /plylstSeq\s*[=:]\s*['"]?(\d+)/g,
+  ]
+  for (const re of textPatterns) {
+    for (const match of html.matchAll(re)) add(match[1], '')
+  }
+
   return refs
 }
