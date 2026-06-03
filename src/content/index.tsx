@@ -1,22 +1,48 @@
-import { createRoot } from 'react-dom/client'
-import { Badge } from './Badge'
+import { checkMelonSession, extractAll } from '../lib/melonClient'
+import type {
+  CheckMelonSessionResponse,
+  ContentRequest,
+  ExtractAllResponse,
+} from '../lib/types'
 
-// 콘텐츠 스크립트: 매칭된 웹페이지에 React UI를 주입합니다.
-// 호스트 페이지 스타일과 충돌을 피하기 위해 Shadow DOM에 마운트합니다.
-const HOST_ID = 'muma-content-root'
+chrome.runtime.onMessage.addListener(
+  (
+    msg: ContentRequest,
+    _sender,
+    sendResponse: (r: CheckMelonSessionResponse | ExtractAllResponse) => void,
+  ) => {
+    if (msg?.type === 'CHECK_MELON_SESSION') {
+      console.info('[muma] CHECK_MELON_SESSION received', {
+        href: location.href,
+        readyState: document.readyState,
+      })
+      checkMelonSession()
+        .then((result) => sendResponse({ ok: true, result }))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err)
+          console.error('[muma] CHECK_MELON_SESSION failed', err)
+          sendResponse({ ok: false, error: message })
+        })
+      return true
+    }
 
-function mount() {
-  if (document.getElementById(HOST_ID)) return
-
-  const host = document.createElement('div')
-  host.id = HOST_ID
-  document.body.appendChild(host)
-
-  const shadow = host.attachShadow({ mode: 'open' })
-  const container = document.createElement('div')
-  shadow.appendChild(container)
-
-  createRoot(container).render(<Badge />)
-}
-
-mount()
+    if (msg?.type !== 'EXTRACT_ALL') return
+    console.info('[muma] EXTRACT_ALL received', {
+      href: location.href,
+      readyState: document.readyState,
+    })
+    extractAll()
+      .then((result) => {
+        console.info('[muma] EXTRACT_ALL completed', {
+          playlistCount: result.playlists.length,
+        })
+        sendResponse({ ok: true, result })
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[muma] EXTRACT_ALL failed', err)
+        sendResponse({ ok: false, error: message })
+      })
+    return true // 비동기 응답을 위해 채널 유지
+  },
+)

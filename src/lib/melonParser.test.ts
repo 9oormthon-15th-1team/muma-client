@@ -1,0 +1,152 @@
+import { test, expect } from 'vitest'
+import { parseSongList, parsePlaylistSeqs } from './melonParser'
+
+// 실제 listSong.htm 응답에서 발췌한 2곡 구조
+const FIXTURE = `
+<div class="section_playlist">
+<h3 class="title arr">수록곡 <span class="cnt">(2)</span></h3>
+<table>
+<tbody>
+<tr>
+  <td><div class="wrap pd_none left">
+    <input type="checkbox" class="input_check" name="input_check" value="1644933" />
+  </div></td>
+  <td class="no"><div class="wrap">1</div></td>
+  <td class="t_left"><div class="wrap pd_none"><div class="ellipsis">
+    <a href="javascript:melon.play.playSong('75010101',1644933);" class="fc_gray" title="언젠가 이곳이 재생 - 새 창">언젠가 이곳이</a>
+  </div></div></td>
+  <td class="t_left"><div class="wrap wrapArtistName"><div id="artistName" class="ellipsis">
+    <a href="javascript:melon.link.goArtistDetail('261143');" class="fc_mgray">이수</a>
+  </div></div></td>
+  <td class="t_left"><div class="wrap"><div class="ellipsis">
+    <a href="javascript:melon.link.goAlbumDetail('352036');" class="fc_mgray">뮤지컬 대장금 OST &#x27;언젠가 이곳이&#x27;</a>
+  </div></div></td>
+</tr>
+<tr>
+  <td><div class="wrap pd_none left">
+    <input type="checkbox" class="input_check" name="input_check" value="3801596" />
+  </div></td>
+  <td class="no"><div class="wrap">2</div></td>
+  <td class="t_left"><div class="wrap pd_none"><div class="ellipsis">
+    <a href="javascript:melon.play.playSong('75010101',3801596);" class="fc_gray" title="돌고 돌아도 재생 - 새 창">돌고 돌아도</a>
+  </div></div></td>
+  <td class="t_left"><div class="wrap wrapArtistName"><div id="artistName" class="ellipsis">
+    <a href="javascript:melon.link.goArtistDetail('52607');" class="fc_mgray">XIA (준수)</a>
+  </div></div></td>
+  <td class="t_left"><div class="wrap"><div class="ellipsis">
+    <a href="javascript:melon.link.goAlbumDetail('2123615');" class="fc_mgray">Tarantallegra</a>
+  </div></div></td>
+</tr>
+</tbody>
+</table>
+</div>`
+
+test('parseSongList: 곡 수와 각 필드를 추출한다', () => {
+  const songs = parseSongList(FIXTURE)
+  expect(songs).toHaveLength(2)
+  expect(songs[0]).toEqual(expect.objectContaining({
+    songId: '1644933',
+    trackNo: 1,
+    title: '언젠가 이곳이',
+    artist: '이수',
+    album: "뮤지컬 대장금 OST '언젠가 이곳이'",
+    artistIds: '261143',
+    albumId: '352036',
+    songUrl: 'https://www.melon.com/song/detail.htm?songId=1644933',
+  }))
+  expect(songs[1].songId).toBe('3801596')
+  expect(songs[1].artist).toBe('XIA (준수)')
+  expect(songs[1].album).toBe('Tarantallegra')
+})
+
+test('parseSongList: 멀티 아티스트는 "; ", artistIds는 ";"로 합친다', () => {
+  const multi = `
+  <table><tbody><tr>
+    <td><input type="checkbox" class="input_check" name="input_check" value="999" /></td>
+    <td class="no"><div class="wrap">1</div></td>
+    <td class="t_left"><a class="fc_gray">콜라보곡</a></td>
+    <td class="t_left"><div class="wrap wrapArtistName">
+      <a href="javascript:melon.link.goArtistDetail('111');" class="fc_mgray">아이유</a>
+      <a href="javascript:melon.link.goArtistDetail('222');" class="fc_mgray">박명수</a>
+    </div></td>
+    <td class="t_left"><div class="wrap">
+      <a href="javascript:melon.link.goAlbumDetail('333');" class="fc_mgray">콜라보앨범</a>
+    </div></td>
+  </tr></tbody></table>`
+  const [song] = parseSongList(multi)
+  expect(song.artist).toBe('아이유; 박명수')
+  expect(song.artistIds).toBe('111;222')
+})
+
+test('parseSongList: 곡이 없으면 빈 배열', () => {
+  expect(parseSongList('<div class="section_playlist"></div>')).toEqual([])
+})
+
+const LIST_FIXTURE = `
+<ul class="list_playlist">
+  <li>
+    <a href="/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=446121958">내 인생 플리</a>
+  </li>
+  <li>
+    <a href="/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=500000001">운동할 때</a>
+  </li>
+  <li>
+    <a href="/mymusic/playlist/mymusicplaylistview_inform.htm?plylstSeq=446121958">중복은 무시</a>
+  </li>
+</ul>`
+
+test('parsePlaylistSeqs: 중복 제거하고 seq+title 추출', () => {
+  const result = parsePlaylistSeqs(LIST_FIXTURE)
+  expect(result).toEqual([
+    { seq: '446121958', title: '내 인생 플리' },
+    { seq: '500000001', title: '운동할 때' },
+  ])
+})
+
+test('parsePlaylistSeqs: 메인 목록 페이지의 범용 plylstSeq 패턴을 추출', () => {
+  const result = parsePlaylistSeqs(`
+    <button onclick="goPlaylist('plylstSeq=446121958')">열기</button>
+    <script>var next = { plylstSeq: '500000001' }</script>
+  `)
+
+  expect(result).toEqual([
+    { seq: '446121958', title: '446121958' },
+    { seq: '500000001', title: '500000001' },
+  ])
+})
+
+// 실제 mymusicplaylist_list.htm 응답 구조 (goPlaylistDetail 앵커 + 썸네일/제목 중복)
+const REAL_LIST_FIXTURE = `
+<div id="pageList"><table><tbody>
+<tr>
+  <td><div class="wrap"><span class="rank">1</span></div></td>
+  <td><div class="wrap tl pr50"><div class="wrap_album01">
+    <a href="javascript:mymusic.mymusicLink.goPlaylistDetail('0','Y','N','556971210');" title="오피셜&nbsp;플리 - 페이지 이동" class="thumb72"><span class="thumb_frame72"></span></a>
+    <dl class="collection_info"><dt>
+      <strong class="none">플레이리스트 명</strong>
+      <a href="javascript:mymusic.mymusicLink.goPlaylistDetail('0','Y','N','556971210');" title="오피셜&nbsp;플리 - 페이지 이동">오피셜&nbsp;플리</a>
+    </dt></dl>
+  </div></div></td>
+  <td><button onclick="melon.play.playPlayList('55100101','556971210','server','57656107');">전체듣기</button></td>
+</tr>
+<tr>
+  <td><div class="wrap"><span class="rank">2</span></div></td>
+  <td><div class="wrap tl pr50"><div class="wrap_album01">
+    <a href="javascript:mymusic.mymusicLink.goPlaylistDetail('0','Y','N','500000001');" title="운동할 때 - 페이지 이동" class="thumb72"></a>
+    <dl class="collection_info"><dt>
+      <a href="javascript:mymusic.mymusicLink.goPlaylistDetail('0','Y','N','500000001');">운동할 때</a>
+    </dt></dl>
+  </div></div></td>
+</tr>
+</tbody></table></div>`
+
+test('parsePlaylistSeqs: 실제 목록 페이지의 goPlaylistDetail 앵커를 추출(중복 제거)', () => {
+  expect(parsePlaylistSeqs(REAL_LIST_FIXTURE)).toEqual([
+    { seq: '556971210', title: '오피셜 플리' },
+    { seq: '500000001', title: '운동할 때' },
+  ])
+})
+
+test('parsePlaylistSeqs: 항목 없으면 빈 배열', () => {
+  expect(parsePlaylistSeqs('<div></div>')).toEqual([])
+})

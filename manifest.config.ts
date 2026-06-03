@@ -32,7 +32,7 @@ export default defineManifest({
   // 콘텐츠 스크립트: 매칭되는 웹페이지에 주입
   content_scripts: [
     {
-      matches: ['<all_urls>'],
+      matches: ['*://*.melon.com/*'],
       js: ['src/content/index.tsx'],
       run_at: 'document_idle',
     },
@@ -45,4 +45,5 @@ export default defineManifest({
   },
 
   permissions: ['storage', 'activeTab'],
+  host_permissions: ['http://192.168.0.22:8080/*'],
 })
