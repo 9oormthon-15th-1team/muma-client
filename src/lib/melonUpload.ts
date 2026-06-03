@@ -7,6 +7,14 @@ function parseLikes(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function normalizeArtistsText(value: string): string {
+  return value
+    .split(/[;,]/)
+    .map((artist) => artist.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
 export function mapExtractResultToMelonTracks(result: ExtractResult): MelonTrackRequest[] {
   return result.playlists.flatMap((playlist) =>
     playlist.songs.map((song) => ({
@@ -14,7 +22,7 @@ export function mapExtractResultToMelonTracks(result: ExtractResult): MelonTrack
       position: song.trackNo,
       melon_song_id: song.songId,
       title: song.title,
-      artists_text: song.artist,
+      artists_text: normalizeArtistsText(song.artist),
       melon_artist_ids: song.artistIds ?? '',
       album_title: song.album,
       melon_album_id: song.albumId ?? '',
