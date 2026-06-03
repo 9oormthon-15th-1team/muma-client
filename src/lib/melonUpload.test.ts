@@ -88,6 +88,50 @@ describe('mapExtractResultToMelonTracks', () => {
       '백현 (BAEKHYUN), 솔지, 소유 (SOYOU), 박규리',
     )
   })
+
+  test('여러 플레이리스트를 flat preview 요청으로 변환하되 playlist_id를 보존한다', () => {
+    const multiPlaylistResult: ExtractResult = {
+      extractedAt: '2026-06-03T00:00:00.000Z',
+      playlists: [
+        {
+          seq: 'playlist-a',
+          title: '출근길',
+          songCount: 1,
+          songs: [
+            {
+              songId: 'same-song',
+              trackNo: 1,
+              title: '같은 곡',
+              artist: '가수',
+              album: '앨범',
+            },
+          ],
+        },
+        {
+          seq: 'playlist-b',
+          title: '운동',
+          songCount: 1,
+          songs: [
+            {
+              songId: 'same-song',
+              trackNo: 1,
+              title: '같은 곡',
+              artist: '가수',
+              album: '앨범',
+            },
+          ],
+        },
+      ],
+    }
+
+    expect(mapExtractResultToMelonTracks(multiPlaylistResult).map((track) => ({
+      playlist_id: track.playlist_id,
+      melon_song_id: track.melon_song_id,
+    }))).toEqual([
+      { playlist_id: 'playlist-a', melon_song_id: 'same-song' },
+      { playlist_id: 'playlist-b', melon_song_id: 'same-song' },
+    ])
+  })
 })
 
 describe('uploadMelonTracks', () => {

@@ -1,10 +1,5 @@
-import { uploadMelonTracks, exportToSpotify } from '../lib/melonUpload'
-import type {
-  ExportToSpotifyRequest,
-  ExportToSpotifyResponse,
-  UploadMelonTracksRequest,
-  UploadMelonTracksResponse,
-} from '../lib/types'
+import { exportToSpotify } from '../lib/melonUpload'
+import type { ExportToSpotifyRequest, ExportToSpotifyResponse } from '../lib/types'
 import { login, getStoredTokens, clearTokens, getValidAccessToken } from '../spotify/auth'
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -16,30 +11,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === 'PING') {
     sendResponse({ type: 'PONG', at: Date.now() })
-    return true
-  }
-
-  if (message?.type === 'UPLOAD_MELON_TRACKS') {
-    const { tracks } = message as UploadMelonTracksRequest
-    console.info('[muma] upload:payload', {
-      count: tracks.length,
-      preview: tracks.slice(0, 5),
-      tracks,
-    })
-    uploadMelonTracks(tracks)
-      .then((result) => {
-        console.info('[muma] upload:success', result)
-        const response: UploadMelonTracksResponse = { ok: true, result }
-        sendResponse(response)
-      })
-      .catch((err: unknown) => {
-        console.error('[muma] upload:failed', err)
-        const response: UploadMelonTracksResponse = {
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        }
-        sendResponse(response)
-      })
     return true
   }
 
