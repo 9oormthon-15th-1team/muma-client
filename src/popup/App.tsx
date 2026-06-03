@@ -30,7 +30,13 @@ export function App() {
         )
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      // 콘텐츠 스크립트가 주입되지 않은 탭(설치 전 열린 페이지 등)에서 발생
+      setError(
+        msg.includes('Receiving end does not exist')
+          ? '멜론 플레이리스트 페이지를 새로고침한 뒤 다시 시도해주세요.'
+          : msg,
+      )
     } finally {
       setLoading(false)
     }
