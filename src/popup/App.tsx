@@ -203,33 +203,36 @@ export function App() {
     })
   }
 
+  const btn =
+    'cursor-pointer rounded-lg border-none bg-indigo-500 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-default disabled:opacity-50'
+
   return (
-    <main style={{ width: 360, padding: 16, fontFamily: 'sans-serif' }}>
-      <h1 style={{ fontSize: 16, margin: '0 0 12px' }}>Muma</h1>
+    <main className="w-90 p-4 font-sans">
+      <h1 className="m-0 mb-3 text-base">Muma</h1>
 
       {import.meta.env.DEV && (
-        <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>
+        <p className="m-0 mb-2 text-[11px] text-gray-500">
           [debug] memberKey(keyCookie): {memberKey ?? '없음(쿠키 미검출/로그아웃)'}
         </p>
       )}
 
       {/* Spotify 연결 */}
-      <div style={{ marginBottom: 12, padding: 8, background: '#f0f0f0', borderRadius: 4 }}>
+      <div className="mb-3 rounded bg-gray-100 p-2">
         <strong>Spotify</strong>
         {spotifyLoggedIn ? (
           <span>
             {' '}연결됨{' '}
-            <button onClick={handleSpotifyLogout} style={{ marginLeft: 4 }}>로그아웃</button>
+            <button onClick={handleSpotifyLogout} className={`${btn} ml-1`}>로그아웃</button>
           </span>
         ) : (
           <span>
             {' '}
-            <button onClick={handleSpotifyLogin} disabled={spotifyLoading}>
+            <button onClick={handleSpotifyLogin} disabled={spotifyLoading} className={btn}>
               {spotifyLoading ? '로그인 중...' : '로그인'}
             </button>
           </span>
         )}
-        {spotifyError && <p style={{ color: 'crimson', margin: '4px 0 0' }}>{spotifyError}</p>}
+        {spotifyError && <p className="mt-1 mb-0 text-red-600">{spotifyError}</p>}
       </div>
 
       {status === 'checking' && <p>멜론 로그인 상태 확인 중...</p>}
@@ -237,22 +240,22 @@ export function App() {
       {status === 'not_melon' && (
         <div>
           <p>멜론 페이지에서 실행해주세요.</p>
-          <button onClick={openMelonLogin}>멜론 열기</button>
+          <button onClick={openMelonLogin} className={btn}>멜론 열기</button>
         </div>
       )}
 
       {status === 'content_not_ready' && (
         <div>
           <p>멜론 페이지를 새로고침한 뒤 다시 시도해주세요.</p>
-          <button onClick={checkSession}>다시 확인</button>
+          <button onClick={checkSession} className={btn}>다시 확인</button>
         </div>
       )}
 
       {status === 'ready' && session?.status === 'LOGGED_OUT' && (
         <div>
           <p>멜론 로그인이 필요합니다.</p>
-          <button onClick={openMelonLogin}>멜론 로그인하기</button>
-          <button onClick={checkSession} style={{ marginLeft: 8 }}>
+          <button onClick={openMelonLogin} className={btn}>멜론 로그인하기</button>
+          <button onClick={checkSession} className={`${btn} ml-2`}>
             다시 확인
           </button>
         </div>
@@ -261,8 +264,8 @@ export function App() {
       {status === 'ready' && session?.status === 'PLAYLIST_IDS_NOT_FOUND' && (
         <div>
           <p>로그인됨 — 플레이리스트를 불러오지 못했습니다. 내 플레이리스트 페이지에서 다시 시도해주세요.</p>
-          <button onClick={openMyMusic}>내 플레이리스트 열기</button>
-          <button onClick={checkSession} style={{ marginLeft: 8 }}>
+          <button onClick={openMyMusic} className={btn}>내 플레이리스트 열기</button>
+          <button onClick={checkSession} className={`${btn} ml-2`}>
             다시 확인
           </button>
         </div>
@@ -275,10 +278,10 @@ export function App() {
               ? `플레이리스트 ${session.playlistCount}개를 찾았습니다.`
               : '로그인됨 — 추출을 눌러 플레이리스트를 가져오세요.'}
           </p>
-          <button onClick={handleExtract} disabled={loading}>
+          <button onClick={handleExtract} disabled={loading} className={btn}>
             {loading ? '추출 중...' : '내 플레이리스트 전체 추출'}
           </button>
-          <button onClick={checkSession} disabled={loading} style={{ marginLeft: 8 }}>
+          <button onClick={checkSession} disabled={loading} className={`${btn} ml-2`}>
             다시 확인
           </button>
         </div>
@@ -287,25 +290,25 @@ export function App() {
       {status === 'error' && (
         <div>
           <p>상태 확인 실패</p>
-          <button onClick={checkSession}>다시 확인</button>
+          <button onClick={checkSession} className={btn}>다시 확인</button>
         </div>
       )}
 
-      {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      {error && <p className="text-red-600">{error}</p>}
       {result && (
-        <div style={{ marginTop: 12 }}>
+        <div className="mt-3">
           <p>플레이리스트 {result.playlists.length}개</p>
-          <button onClick={handleUpload} disabled={uploading}>
+          <button onClick={handleUpload} disabled={uploading} className={btn}>
             {uploading ? '서버 전송 중...' : '서버로 전송'}
           </button>
-          {uploadError && <p style={{ color: 'crimson' }}>서버 전송 실패: {uploadError}</p>}
-          {uploadSucceeded && <p style={{ color: 'green' }}>서버 전송 완료</p>}
+          {uploadError && <p className="text-red-600">서버 전송 실패: {uploadError}</p>}
+          {uploadSucceeded && <p className="text-green-600">서버 전송 완료</p>}
           {result.playlists.map((pl) => (
-            <details key={pl.seq} style={{ marginBottom: 8 }}>
+            <details key={pl.seq} className="mb-2">
               <summary>
                 {pl.title} ({pl.songCount}곡)
               </summary>
-              <ol style={{ margin: '4px 0', paddingLeft: 20 }}>
+              <ol className="my-1 list-decimal pl-5">
                 {pl.songs.map((s) => (
                   <li key={s.songId}>
                     {s.title} — {s.artist}

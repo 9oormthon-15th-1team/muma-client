@@ -18,17 +18,23 @@ export function App() {
   }
 
   return (
-    <main className="options">
-      <h1>Muma 설정</h1>
-      <label className="field">
+    <main className="mx-auto my-10 flex max-w-[420px] flex-col gap-4 px-5">
+      <h1 className="text-xl font-bold">Muma 설정</h1>
+      <label className="flex flex-col gap-1.5 text-sm">
         <span>사용자 이름</span>
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="이름을 입력하세요"
+          className="rounded-lg border border-gray-300 px-2.5 py-2 text-sm"
         />
       </label>
-      <button onClick={save}>{saved ? '저장됨 ✓' : '저장'}</button>
+      <button
+        onClick={save}
+        className="cursor-pointer rounded-lg bg-indigo-500 p-2.5 text-sm font-semibold text-white"
+      >
+        {saved ? '저장됨 ✓' : '저장'}
+      </button>
     </main>
   )
 }
