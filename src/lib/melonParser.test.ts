@@ -1,6 +1,5 @@
 import { test, expect } from 'vitest'
-import { parseSongList } from './melonParser'
-import { parsePlaylistSeqs } from './melonParser'
+import { parseSongList, parsePlaylistSeqs } from './melonParser'
 
 // 실제 listSong.htm 응답에서 발췌한 2곡 구조
 const FIXTURE = `
