@@ -23,6 +23,11 @@ export function spotifySelectionKey(playlistId: string, melonSongId: string): st
   return `${playlistId}:${melonSongId}`
 }
 
+// 추출 곡 선택 키: 같은 곡이 여러 플레이리스트에 있을 수 있어 플레이리스트 스코프로 구분한다.
+export function songSelectionKey(playlistSeq: string, songId: string): string {
+  return `${playlistSeq}:${songId}`
+}
+
 export function groupPreviewByPlaylist(
   playlists: Playlist[],
   preview: MelonTrackResult[],

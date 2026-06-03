@@ -1,10 +1,18 @@
 import { useState } from 'react'
 import type { Playlist } from '../../lib/types'
+import { songSelectionKey } from '../../lib/playlistPreview'
 
 interface SelectScreenProps {
   playlists: Playlist[]
+  selectedPlaylists: Set<string>
+  selectedSongs: Set<string>
+  canProceed: boolean
+  onTogglePlaylist: (seq: string) => void
+  onToggleAllPlaylists: () => void
+  onToggleSong: (seq: string, songId: string) => void
+  onToggleAllSongs: (pl: Playlist) => void
   onBack: () => void
-  onNext: (selectedSeqs: Set<string>) => void
+  onNext: () => void
 }
 
 function CheckCircle({ checked, size = 20 }: { checked: boolean; size?: number }) {
@@ -26,15 +34,25 @@ function PlaylistCard({
   playlist,
   selected,
   expanded,
+  selectedSongs,
   onToggle,
   onExpand,
+  onToggleSong,
+  onToggleAllSongs,
 }: {
   playlist: Playlist
   selected: boolean
   expanded: boolean
+  selectedSongs: Set<string>
   onToggle: () => void
   onExpand: () => void
+  onToggleSong: (songId: string) => void
+  onToggleAllSongs: () => void
 }) {
+  const allSongsSelected =
+    playlist.songs.length > 0 &&
+    playlist.songs.every((s) => selectedSongs.has(songSelectionKey(playlist.seq, s.songId)))
+
   return (
     <div
       className={`flex flex-col gap-3 rounded-xl border px-4 py-3 ${
@@ -71,13 +89,30 @@ function PlaylistCard({
       {/* Song list (expanded) */}
       {expanded && (
         <div className="flex flex-col gap-2">
+          {/* 곡 전체선택 */}
+          <button
+            onClick={onToggleAllSongs}
+            className="flex cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left"
+          >
+            <CheckCircle checked={allSongsSelected} size={16} />
+            <span className="text-[12px] font-semibold leading-[18px] text-[var(--color-brand-primary)]">
+              곡 전체선택
+            </span>
+          </button>
           {playlist.songs.map((song) => (
-            <div key={song.songId} className="flex items-center gap-2">
-              <CheckCircle checked={false} size={16} />
+            <button
+              key={song.songId}
+              onClick={() => onToggleSong(song.songId)}
+              className="flex cursor-pointer items-center gap-2 border-none bg-transparent p-0 text-left"
+            >
+              <CheckCircle
+                checked={selectedSongs.has(songSelectionKey(playlist.seq, song.songId))}
+                size={16}
+              />
               <span className="text-[12px] leading-[18px] text-[var(--color-text-inverse)]">
                 {song.title}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -85,33 +120,29 @@ function PlaylistCard({
   )
 }
 
-export function SelectScreen({ playlists, onBack, onNext }: SelectScreenProps) {
-  const [selectedSeqs, setSelectedSeqs] = useState<Set<string>>(new Set())
+export function SelectScreen({
+  playlists,
+  selectedPlaylists,
+  selectedSongs,
+  canProceed,
+  onTogglePlaylist,
+  onToggleAllPlaylists,
+  onToggleSong,
+  onToggleAllSongs,
+  onBack,
+  onNext,
+}: SelectScreenProps) {
   const [expandedSeq, setExpandedSeq] = useState<string | null>(null)
 
   const totalSongs = playlists.reduce((sum, pl) => sum + pl.songCount, 0)
-  const allSelected = playlists.length > 0 && selectedSeqs.size === playlists.length
-  const hasSelection = selectedSeqs.size > 0
+  const allSelected = playlists.length > 0 && selectedPlaylists.size === playlists.length
   const selectedSongCount = playlists
-    .filter((pl) => selectedSeqs.has(pl.seq))
-    .reduce((sum, pl) => sum + pl.songCount, 0)
-
-  function togglePlaylist(seq: string) {
-    setSelectedSeqs((prev) => {
-      const next = new Set(prev)
-      if (next.has(seq)) next.delete(seq)
-      else next.add(seq)
-      return next
-    })
-  }
-
-  function toggleAll() {
-    if (allSelected) {
-      setSelectedSeqs(new Set())
-    } else {
-      setSelectedSeqs(new Set(playlists.map((pl) => pl.seq)))
-    }
-  }
+    .filter((pl) => selectedPlaylists.has(pl.seq))
+    .reduce(
+      (sum, pl) =>
+        sum + pl.songs.filter((s) => selectedSongs.has(songSelectionKey(pl.seq, s.songId))).length,
+      0,
+    )
 
   function toggleExpand(seq: string) {
     setExpandedSeq((prev) => (prev === seq ? null : seq))
@@ -159,15 +190,15 @@ export function SelectScreen({ playlists, onBack, onNext }: SelectScreenProps) {
       <div className="flex flex-col gap-4">
         {/* Select all row */}
         <div className="flex items-center justify-between border-b border-[var(--color-bg-secondary)] py-2">
-          <button onClick={toggleAll} className="flex cursor-pointer items-center gap-2 border-none bg-transparent p-0">
+          <button onClick={onToggleAllPlaylists} className="flex cursor-pointer items-center gap-2 border-none bg-transparent p-0">
             <CheckCircle checked={allSelected} />
             <span className="text-[12px] font-semibold leading-[18px] text-[var(--color-text-inverse)]">
               전체선택
             </span>
           </button>
-          {selectedSeqs.size > 0 && (
+          {selectedPlaylists.size > 0 && (
             <span className="text-[12px] font-semibold leading-[18px] text-[var(--color-brand-primary)]">
-              {selectedSeqs.size}개 선택됨
+              {selectedPlaylists.size}개 선택됨
             </span>
           )}
         </div>
@@ -177,23 +208,26 @@ export function SelectScreen({ playlists, onBack, onNext }: SelectScreenProps) {
           <PlaylistCard
             key={pl.seq}
             playlist={pl}
-            selected={selectedSeqs.has(pl.seq)}
+            selected={selectedPlaylists.has(pl.seq)}
             expanded={expandedSeq === pl.seq}
-            onToggle={() => togglePlaylist(pl.seq)}
+            selectedSongs={selectedSongs}
+            onToggle={() => onTogglePlaylist(pl.seq)}
             onExpand={() => toggleExpand(pl.seq)}
+            onToggleSong={(songId) => onToggleSong(pl.seq, songId)}
+            onToggleAllSongs={() => onToggleAllSongs(pl)}
           />
         ))}
       </div>
 
       {/* Selection info */}
       <p className="m-0 shrink-0 text-center text-[12px] font-semibold leading-[18px] text-[var(--color-text-inverse)]">
-        {selectedSeqs.size}개 플레이리스트 · {selectedSongCount}곡 선택됨
+        {selectedPlaylists.size}개 플레이리스트 · {selectedSongCount}곡 선택됨
       </p>
 
       {/* CTA button */}
-      {hasSelection ? (
+      {canProceed ? (
         <button
-          onClick={() => onNext(selectedSeqs)}
+          onClick={onNext}
           className="flex h-12 w-full shrink-0 cursor-pointer items-center justify-center rounded-xl border-none bg-[var(--color-brand-primary)] text-[15px] font-semibold text-[var(--color-text-inverse)]"
         >
           다음

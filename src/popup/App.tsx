@@ -14,6 +14,7 @@ import {
   buildExportTrackIds,
   buildPlaylistExportJobs,
   groupPreviewByPlaylist,
+  songSelectionKey,
   spotifySelectionKey,
   type PlaylistExportStatusMap,
   type PlaylistPreviewGroup,
@@ -67,11 +68,6 @@ interface SpotifyPreviewPanelProps {
   onClearSelection: (playlistId: string, songId: string) => void
   onExportAll: () => void
   onSelectTrack: (playlistId: string, songId: string, trackId: string) => void
-}
-
-// 추출 곡 선택 키: 같은 곡이 여러 플레이리스트에 있을 수 있어 플레이리스트 스코프로 구분한다.
-function songSelectionKey(playlistSeq: string, songId: string): string {
-  return `${playlistSeq}:${songId}`
 }
 
 function smallestAlbumImage(track: SpotifyTrack): string | null {
@@ -511,11 +507,13 @@ export function App() {
     })
   }
 
-  async function handleExport() {
+  async function handleExport(selectionOverride?: Record<string, string>) {
     if (!preview || previewGroups.length === 0) return
 
+    // review 화면에서 막 확정한 선택은 setSelected 직후라 state 반영 전이므로 인자로 우선 사용한다.
+    const sel = selectionOverride ?? selected
     // 클라이언트에서 플레이리스트별 잡(payload)을 순차 수집한다.
-    const jobs = buildPlaylistExportJobs(previewGroups, selected)
+    const jobs = buildPlaylistExportJobs(previewGroups, sel)
     if (jobs.length === 0) {
       setExportStatuses(
         Object.fromEntries(
@@ -679,13 +677,15 @@ export function App() {
     return (
       <SelectScreen
         playlists={result.playlists}
+        selectedPlaylists={selectedPlaylists}
+        selectedSongs={selectedSongs}
+        canProceed={chosenPlaylists.length > 0}
+        onTogglePlaylist={togglePlaylist}
+        onToggleAllPlaylists={toggleAllPlaylists}
+        onToggleSong={toggleSong}
+        onToggleAllSongs={toggleAllSongs}
         onBack={() => setScreen('guide')}
-        onNext={(selectedSeqs) => {
-          // 선택된 플레이리스트만 필터링하여 result 업데이트 후 app 화면으로
-          const filtered = result.playlists.filter((pl) => selectedSeqs.has(pl.seq))
-          setResult({ ...result, playlists: filtered })
-          setScreen('platform')
-        }}
+        onNext={() => setScreen('platform')}
       />
     )
   }
@@ -721,7 +721,7 @@ export function App() {
   }
 
   if (screen === 'matching') {
-    const totalSongs = result?.playlists.reduce((sum, pl) => sum + pl.songCount, 0) ?? 0
+    const totalSongs = effectiveSongCount
     const matchedCount = preview?.filter((r) => r.results.length > 0).length ?? 0
     const processingCount = uploading ? Math.max(totalSongs - matchedCount, 0) : 0
     const matchProgress = totalSongs > 0 ? (matchedCount / totalSongs) * 100 : 0
@@ -729,7 +729,7 @@ export function App() {
     return (
       <MatchingScreen
         onBack={() => setScreen('platform')}
-        playlistCount={result?.playlists.length ?? 0}
+        playlistCount={selectedPlaylistList.length}
         totalSongs={totalSongs}
         matchedCount={matchedCount}
         processingCount={processingCount}
@@ -751,8 +751,8 @@ export function App() {
         autoMatchedCount={autoMatched}
         onNext={(reviewSelected) => {
           setSelected(reviewSelected)
-          // 후보 선택 완료 → 내보내기 실행
-          void handleExport()
+          // 후보 선택 완료 → 내보내기 실행 (setSelected 반영 전이므로 선택값을 직접 전달)
+          void handleExport(reviewSelected)
           setScreen('complete')
         }}
       />
@@ -760,13 +760,13 @@ export function App() {
   }
 
   if (screen === 'complete') {
-    const totalSongs = result?.playlists.reduce((sum, pl) => sum + pl.songCount, 0) ?? 0
+    const totalSongs = effectiveSongCount
     const exportedCount = preview ? buildExportTrackIds(preview, selected).length : 0
 
     return (
       <CompleteScreen
         onBack={() => setScreen('review')}
-        playlistCount={result?.playlists.length ?? 0}
+        playlistCount={chosenPlaylists.length}
         songCount={exportedCount}
         totalSelected={totalSongs}
       />

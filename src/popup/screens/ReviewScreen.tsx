@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { MelonTrackResult } from '../../lib/types'
+import { spotifySelectionKey } from '../../lib/playlistPreview'
 
 interface ReviewScreenProps {
   onBack: () => void
@@ -137,13 +138,18 @@ export function ReviewScreen({
   tracks,
   autoMatchedCount,
 }: ReviewScreenProps) {
-  const [selected, setSelected] = useState<Record<string, string>>({})
+  // 기본값: 각 모호곡의 첫 후보(정확히 일치)를 미리 선택해 진입 즉시 전송 가능 상태로 만든다.
+  const [selected, setSelected] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      tracks.map((t) => [spotifySelectionKey(t.playlist_id, t.melon_song_id), t.results[0].id]),
+    ),
+  )
 
   const reviewedCount = Object.keys(selected).length
   const totalAmbiguous = tracks.length
 
-  function handleSelect(songId: string, trackId: string) {
-    setSelected((prev) => ({ ...prev, [songId]: trackId }))
+  function handleSelect(key: string, trackId: string) {
+    setSelected((prev) => ({ ...prev, [key]: trackId }))
   }
 
   function handleNext() {
@@ -197,14 +203,17 @@ export function ReviewScreen({
       </div>
 
       {/* Track review cards */}
-      {tracks.map((track) => (
-        <TrackCard
-          key={track.melon_song_id}
-          track={track}
-          selectedId={selected[track.melon_song_id]}
-          onSelect={(trackId) => handleSelect(track.melon_song_id, trackId)}
-        />
-      ))}
+      {tracks.map((track) => {
+        const key = spotifySelectionKey(track.playlist_id, track.melon_song_id)
+        return (
+          <TrackCard
+            key={key}
+            track={track}
+            selectedId={selected[key]}
+            onSelect={(trackId) => handleSelect(key, trackId)}
+          />
+        )
+      })}
 
       {/* CTA */}
       {allReviewed ? (
