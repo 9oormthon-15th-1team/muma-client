@@ -62,15 +62,6 @@ export interface SpotifyExportRequest {
   track_ids: string[]
 }
 
-export interface UploadMelonTracksRequest {
-  type: 'UPLOAD_MELON_TRACKS'
-  tracks: MelonTrackRequest[]
-}
-
-export type UploadMelonTracksResponse =
-  | { ok: true; result: MelonTrackResult[] }
-  | { ok: false; error: string }
-
 export interface ExportToSpotifyRequest {
   type: 'EXPORT_TO_SPOTIFY'
   payload: SpotifyExportRequest

@@ -6,10 +6,18 @@ import type {
   ExtractResult,
   MelonSessionResult,
   MelonTrackResult,
+  Playlist,
   SpotifyTrack,
-  UploadMelonTracksResponse,
 } from '../lib/types'
-import { mapExtractResultToMelonTracks } from '../lib/melonUpload'
+import { mapExtractResultToMelonTracks, uploadMelonTracks } from '../lib/melonUpload'
+import {
+  buildExportTrackIds,
+  buildPlaylistExportJobs,
+  groupPreviewByPlaylist,
+  spotifySelectionKey,
+  type PlaylistExportStatusMap,
+  type PlaylistPreviewGroup,
+} from '../lib/playlistPreview'
 import { memberKeyFromMlcp } from '../lib/melonClient'
 import { MainScreen } from './screens/MainScreen'
 import { GuideScreen } from './screens/GuideScreen'
@@ -49,19 +57,21 @@ type PopupStatus = 'checking' | 'not_melon' | 'content_not_ready' | 'ready' | 'e
 
 interface SpotifyPreviewPanelProps {
   btnClassName: string
-  exporting: boolean
-  exportError: string | null
-  exportSucceeded: boolean
-  playlistName: string
-  preview: MelonTrackResult[]
+  exportingAll: boolean
+  exportStatuses: PlaylistExportStatusMap
+  groups: PlaylistPreviewGroup[]
   selected: Record<string, string>
   totalCount: number
   autoIncludedCount: number
   spotifyLoggedIn: boolean
-  onClearSelection: (songId: string) => void
-  onExport: () => void
-  onPlaylistNameChange: (name: string) => void
-  onSelectTrack: (songId: string, trackId: string) => void
+  onClearSelection: (playlistId: string, songId: string) => void
+  onExportAll: () => void
+  onSelectTrack: (playlistId: string, songId: string, trackId: string) => void
+}
+
+// 추출 곡 선택 키: 같은 곡이 여러 플레이리스트에 있을 수 있어 플레이리스트 스코프로 구분한다.
+function songSelectionKey(playlistSeq: string, songId: string): string {
+  return `${playlistSeq}:${songId}`
 }
 
 function smallestAlbumImage(track: SpotifyTrack): string | null {
@@ -70,43 +80,19 @@ function smallestAlbumImage(track: SpotifyTrack): string | null {
   return [...images].sort((a, b) => a.width * a.height - b.width * b.height)[0].url
 }
 
-// 전송할 track id 목록을 곡 순서(position)대로 구성한다.
-// - 후보 1개: 그 1개를 자동 포함
-// - 후보 2개 이상: 사용자가 선택한 것만 포함(미선택 시 제외)
-// - 후보 0개: 제외
-function buildExportTrackIds(
-  preview: MelonTrackResult[],
-  selected: Record<string, string>,
-): string[] {
-  return [...preview]
-    .sort((a, b) => a.position - b.position)
-    .map((row) =>
-      row.results.length === 1 ? row.results[0].id : selected[row.melon_song_id],
-    )
-    .filter((id): id is string => Boolean(id))
-}
-
 function SpotifyPreviewPanel({
   btnClassName,
-  exporting,
-  exportError,
-  exportSucceeded,
-  playlistName,
-  preview,
+  exportingAll,
+  exportStatuses,
+  groups,
   selected,
   totalCount,
   autoIncludedCount,
   spotifyLoggedIn,
   onClearSelection,
-  onExport,
-  onPlaylistNameChange,
+  onExportAll,
   onSelectTrack,
 }: SpotifyPreviewPanelProps) {
-  // 후보가 2개 이상인 곡만 선택 대상(후보 1개 이하는 모호하지 않으므로 제외)
-  const ambiguousPreview = preview
-    .filter((row) => row.results.length >= 2)
-    .sort((a, b) => a.position - b.position)
-
   return (
     <div className="mt-4 border-t border-gray-200 pt-3">
       <p className="m-0 mb-2 font-semibold">Spotify 후보 선택</p>
@@ -117,74 +103,107 @@ function SpotifyPreviewPanel({
         </p>
       )}
 
-      {ambiguousPreview.length === 0 ? (
-        <p className="m-0 text-xs text-gray-400">선택이 필요한 곡이 없습니다.</p>
+      {groups.length === 0 ? (
+        <p className="m-0 text-xs text-gray-400">표시할 Spotify 후보가 없습니다.</p>
       ) : (
-        <div className="max-h-72 overflow-y-auto">
-          {ambiguousPreview.map((row) => {
-            const selectedTrackId = selected[row.melon_song_id]
+        <div className="max-h-96 overflow-y-auto">
+          {groups.map((group) => {
+            const ambiguousPreview = group.rows.filter((row) => row.results.length >= 2)
+            const exportTrackIds = buildExportTrackIds(group.rows, selected)
+            const exportStatus = exportStatuses[group.playlist.seq] ?? { status: 'idle' as const }
 
             return (
-              <div key={row.melon_song_id} className="mb-2">
-                <div className="mb-0.5 flex items-start justify-between gap-2">
-                  <p className="m-0 text-xs text-gray-700">
-                    {row.position}. {row.title} — {row.artists_text}
-                  </p>
-                  {selectedTrackId && (
-                    <button
-                      type="button"
-                      onClick={() => onClearSelection(row.melon_song_id)}
-                      className="shrink-0 border-none bg-transparent p-0 text-[11px] text-gray-500 underline"
-                    >
-                      선택 해제
-                    </button>
+              <section key={group.playlist.seq} className="mb-4 border-b border-gray-100 pb-3">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <div>
+                    <p className="m-0 text-sm font-semibold">{group.playlist.title}</p>
+                    <p className="m-0 text-xs text-gray-400">
+                      매칭 {group.rows.length}곡 · 내보내기 {exportTrackIds.length}곡
+                    </p>
+                  </div>
+                  {exportStatus.status === 'exporting' && (
+                    <span className="text-xs text-gray-500">전송 중...</span>
+                  )}
+                  {exportStatus.status === 'success' && (
+                    <span className="text-xs text-green-600">
+                      완료 {exportStatus.exportedCount}곡
+                    </span>
+                  )}
+                  {exportStatus.status === 'error' && (
+                    <span className="text-xs text-red-600">실패</span>
+                  )}
+                  {exportStatus.status === 'skipped' && (
+                    <span className="text-xs text-gray-400">건너뜀</span>
                   )}
                 </div>
-                {row.results.map((track) => {
-                  const imageUrl = smallestAlbumImage(track)
 
-                  return (
-                    <label
-                      key={track.id}
-                      className="flex cursor-pointer items-center gap-2 py-0.5 pl-3 text-xs"
-                    >
-                      <input
-                        type="radio"
-                        name={`spotify-track-${row.melon_song_id}`}
-                        checked={selectedTrackId === track.id}
-                        onChange={() => onSelectTrack(row.melon_song_id, track.id)}
-                      />
-                      {imageUrl && (
-                        <img
-                          src={imageUrl}
-                          alt=""
-                          className="h-6 w-6 rounded"
-                        />
-                      )}
-                      <span>
-                        {track.name} — {track.artists.map((a) => a.name).join(', ')}
-                        <span className="text-gray-400"> · {track.album.name}</span>
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
+                {exportStatus.status === 'error' && (
+                  <p className="m-0 mb-2 text-xs text-red-600">
+                    내보내기 실패: {exportStatus.error}
+                  </p>
+                )}
+                {exportStatus.status === 'skipped' && (
+                  <p className="m-0 mb-2 text-xs text-gray-400">{exportStatus.reason}</p>
+                )}
+
+                {ambiguousPreview.length === 0 ? (
+                  <p className="m-0 text-xs text-gray-400">선택이 필요한 곡이 없습니다.</p>
+                ) : (
+                  ambiguousPreview
+                    .sort((a, b) => a.position - b.position)
+                    .map((row) => {
+                      const key = spotifySelectionKey(row.playlist_id, row.melon_song_id)
+                      const selectedTrackId = selected[key]
+
+                      return (
+                        <div key={key} className="mb-2">
+                          <div className="mb-0.5 flex items-start justify-between gap-2">
+                            <p className="m-0 text-xs text-gray-700">
+                              {row.position}. {row.title} — {row.artists_text}
+                            </p>
+                            {selectedTrackId && (
+                              <button
+                                type="button"
+                                onClick={() => onClearSelection(row.playlist_id, row.melon_song_id)}
+                                className="shrink-0 border-none bg-transparent p-0 text-[11px] text-gray-500 underline"
+                              >
+                                선택 해제
+                              </button>
+                            )}
+                          </div>
+                          {row.results.map((track) => {
+                            const imageUrl = smallestAlbumImage(track)
+
+                            return (
+                              <label
+                                key={track.id}
+                                className="flex cursor-pointer items-center gap-2 py-0.5 pl-3 text-xs"
+                              >
+                                <input
+                                  type="radio"
+                                  name={`spotify-track-${key}`}
+                                  checked={selectedTrackId === track.id}
+                                  onChange={() => onSelectTrack(row.playlist_id, row.melon_song_id, track.id)}
+                                />
+                                {imageUrl && (
+                                  <img src={imageUrl} alt="" className="h-6 w-6 rounded" />
+                                )}
+                                <span>
+                                  {track.name} — {track.artists.map((a) => a.name).join(', ')}
+                                  <span className="text-gray-400"> · {track.album.name}</span>
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )
+                    })
+                )}
+              </section>
             )
           })}
         </div>
       )}
-
-      <div className="mt-3">
-        <label className="block text-xs text-gray-700">
-          플레이리스트 이름
-          <input
-            type="text"
-            value={playlistName}
-            onChange={(e) => onPlaylistNameChange(e.target.value)}
-            className="mt-1 block w-full rounded border border-gray-300 px-2 py-1 text-sm"
-          />
-        </label>
-      </div>
 
       {!spotifyLoggedIn && (
         <p className="mt-2 mb-0 text-xs text-amber-600">
@@ -193,14 +212,12 @@ function SpotifyPreviewPanel({
       )}
 
       <button
-        onClick={onExport}
-        disabled={exporting || !spotifyLoggedIn || !playlistName.trim() || totalCount === 0}
+        onClick={onExportAll}
+        disabled={exportingAll || !spotifyLoggedIn || totalCount === 0}
         className={`${btnClassName} mt-2`}
       >
-        {exporting ? '내보내는 중...' : `Spotify로 내보내기 (${totalCount}곡)`}
+        {exportingAll ? '내보내는 중...' : `Spotify로 플레이리스트별 내보내기 (${totalCount}곡)`}
       </button>
-      {exportError && <p className="text-red-600">내보내기 실패: {exportError}</p>}
-      {exportSucceeded && <p className="text-green-600">Spotify 플레이리스트 생성 완료</p>}
     </div>
   )
 }
@@ -214,17 +231,20 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [result, setResult] = useState<ExtractResult | null>(null)
+  // 추출된 플레이리스트 중 preview 요청 대상으로 선택된 seq 집합
+  const [selectedPlaylists, setSelectedPlaylists] = useState<Set<string>>(new Set())
+  // 선택된 곡: `${playlist_seq}:${songId}` 집합 (플레이리스트 스코프)
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set())
   const [memberKey, setMemberKey] = useState<string | null>(null)
 
   // Spotify 매칭 미리보기 / 선택 / 내보내기
   // preview: 서버가 돌려준 곡별 Spotify 후보 목록
   const [preview, setPreview] = useState<MelonTrackResult[] | null>(null)
-  // selected: melon_song_id → 선택된 Spotify track id (곡당 단일 선택)
+  // selected: `${playlist_id}:${melon_song_id}` → 선택된 Spotify track id (플레이리스트 스코프, 곡당 단일)
   const [selected, setSelected] = useState<Record<string, string>>({})
-  const [playlistName, setPlaylistName] = useState('My Muma Playlist')
-  const [exporting, setExporting] = useState(false)
-  const [exportError, setExportError] = useState<string | null>(null)
-  const [exportSucceeded, setExportSucceeded] = useState(false)
+  const [exportingAll, setExportingAll] = useState(false)
+  // 플레이리스트 seq → export 진행/결과 상태
+  const [exportStatuses, setExportStatuses] = useState<PlaylistExportStatusMap>({})
 
   // Spotify
   const [spotifyLoggedIn, setSpotifyLoggedIn] = useState(false)
@@ -309,10 +329,11 @@ export function App() {
     setError(null)
     setUploadError(null)
     setResult(null)
+    setSelectedPlaylists(new Set())
+    setSelectedSongs(new Set())
     setPreview(null)
     setSelected({})
-    setExportError(null)
-    setExportSucceeded(false)
+    setExportStatuses({})
     try {
       const tab = await getActiveMelonTab()
       if (!tab?.id) {
@@ -326,6 +347,15 @@ export function App() {
       })) as ExtractAllResponse
       if (res.ok) {
         setResult(res.result)
+        // 기본값: 추출된 플레이리스트 + 곡 전부 선택
+        setSelectedPlaylists(new Set(res.result.playlists.map((pl) => pl.seq)))
+        setSelectedSongs(
+          new Set(
+            res.result.playlists.flatMap((pl) =>
+              pl.songs.map((s) => songSelectionKey(pl.seq, s.songId)),
+            ),
+          ),
+        )
         setSession({ status: 'LOGGED_IN', playlistCount: res.result.playlists.length })
       } else if (res.error === 'NOT_LOGGED_IN') {
         setError('멜론에 로그인 후 다시 시도해주세요.')
@@ -359,24 +389,50 @@ export function App() {
   }
 
   async function handleUpload() {
-    if (!result) return
+    if (!result || chosenPlaylists.length === 0) return
     setUploading(true)
     setUploadError(null)
     setPreview(null)
     setSelected({})
-    setExportError(null)
-    setExportSucceeded(false)
+    setExportStatuses({})
     try {
-      const tracks = mapExtractResultToMelonTracks(result)
-      const res = (await chrome.runtime.sendMessage({
-        type: 'UPLOAD_MELON_TRACKS',
-        tracks,
-      })) as UploadMelonTracksResponse
+      // 선택한 플레이리스트의 선택한 곡만 preview를 클라이언트에서 병렬 요청하고 결과를 병합한다.
+      // 한 플레이리스트가 실패해도 나머지는 표시(부분 성공).
+      const chosen = chosenPlaylists
+      const settled = await Promise.allSettled(
+        chosen.map((pl) =>
+          uploadMelonTracks(
+            mapExtractResultToMelonTracks({
+              playlists: [pl],
+              extractedAt: result.extractedAt,
+            }),
+          ),
+        ),
+      )
 
-      if (res.ok) {
-        setPreview(res.result)
+      const merged = settled.flatMap((s) => (s.status === 'fulfilled' ? s.value : []))
+      const failedCount = settled.filter((s) => s.status === 'rejected').length
+
+      if (merged.length === 0) {
+        const firstError = settled.find((s) => s.status === 'rejected') as
+          | PromiseRejectedResult
+          | undefined
+        const reason = firstError?.reason
+        setUploadError(reason instanceof Error ? reason.message : String(reason ?? '매칭 결과가 없습니다.'))
       } else {
-        setUploadError(res.error)
+        setPreview(merged)
+        // 기본값: 후보가 2개 이상인 곡은 첫 번째 후보를 선택해 둔다.
+        const defaultSelected: Record<string, string> = {}
+        for (const row of merged) {
+          if (row.results.length >= 2) {
+            defaultSelected[spotifySelectionKey(row.playlist_id, row.melon_song_id)] =
+              row.results[0].id
+          }
+        }
+        setSelected(defaultSelected)
+        if (failedCount > 0) {
+          setUploadError(`${failedCount}개 플레이리스트 매칭 실패 (성공분만 표시)`)
+        }
       }
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : String(e))
@@ -385,47 +441,134 @@ export function App() {
     }
   }
 
-  function selectTrack(songId: string, trackId: string) {
-    setExportSucceeded(false)
-    setExportError(null)
-    setSelected((prev) => ({ ...prev, [songId]: trackId }))
+  // 플레이리스트 선택이 바뀌면 기존 preview는 더 이상 그 집합과 일치하지 않으므로 초기화
+  function resetPreviewState() {
+    setPreview(null)
+    setSelected({})
+    setExportStatuses({})
   }
 
-  function clearSelection(songId: string) {
-    setExportSucceeded(false)
-    setExportError(null)
+  function togglePlaylist(seq: string) {
+    resetPreviewState()
+    setSelectedPlaylists((prev) => {
+      const next = new Set(prev)
+      if (next.has(seq)) next.delete(seq)
+      else next.add(seq)
+      return next
+    })
+  }
+
+  function toggleAllPlaylists() {
+    if (!result) return
+    resetPreviewState()
+    setSelectedPlaylists((prev) =>
+      prev.size === result.playlists.length
+        ? new Set()
+        : new Set(result.playlists.map((pl) => pl.seq)),
+    )
+  }
+
+  function toggleSong(playlistSeq: string, songId: string) {
+    resetPreviewState()
+    setSelectedSongs((prev) => {
+      const key = songSelectionKey(playlistSeq, songId)
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  // 해당 플레이리스트의 곡 전체 선택/해제 토글
+  function toggleAllSongs(pl: Playlist) {
+    resetPreviewState()
+    setSelectedSongs((prev) => {
+      const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
+      const allOn = keys.every((k) => prev.has(k))
+      const next = new Set(prev)
+      for (const k of keys) {
+        if (allOn) next.delete(k)
+        else next.add(k)
+      }
+      return next
+    })
+  }
+
+  function selectTrack(playlistId: string, songId: string, trackId: string) {
+    setExportStatuses({})
+    setSelected((prev) => ({
+      ...prev,
+      [spotifySelectionKey(playlistId, songId)]: trackId,
+    }))
+  }
+
+  function clearSelection(playlistId: string, songId: string) {
+    setExportStatuses({})
     setSelected((prev) => {
       const next = { ...prev }
-      delete next[songId]
+      delete next[spotifySelectionKey(playlistId, songId)]
       return next
     })
   }
 
   async function handleExport() {
-    if (!preview) return
-    // 후보 1개는 자동 포함 + 후보 2개 이상은 사용자 선택분
-    const trackIds = buildExportTrackIds(preview, selected)
+    if (!preview || previewGroups.length === 0) return
 
-    if (trackIds.length === 0) return
+    // 클라이언트에서 플레이리스트별 잡(payload)을 순차 수집한다.
+    const jobs = buildPlaylistExportJobs(previewGroups, selected)
+    if (jobs.length === 0) {
+      setExportStatuses(
+        Object.fromEntries(
+          previewGroups.map((group) => [
+            group.playlist.seq,
+            { status: 'skipped' as const, reason: '내보낼 수 있는 Spotify 후보가 없습니다.' },
+          ]),
+        ),
+      )
+      return
+    }
 
-    setExporting(true)
-    setExportError(null)
-    setExportSucceeded(false)
+    // 잡이 있는 플레이리스트는 exporting, 없는 건 skipped 로 초기화
+    const initialStatuses: PlaylistExportStatusMap = {}
+    for (const group of previewGroups) {
+      initialStatuses[group.playlist.seq] = jobs.some((job) => job.playlistSeq === group.playlist.seq)
+        ? { status: 'exporting' }
+        : { status: 'skipped', reason: '내보낼 수 있는 Spotify 후보가 없습니다.' }
+    }
+
+    setExportingAll(true)
+    setExportStatuses(initialStatuses)
+
     try {
-      const res = (await chrome.runtime.sendMessage({
-        type: 'EXPORT_TO_SPOTIFY',
-        payload: { playlist_name: playlistName.trim(), track_ids: trackIds },
-      })) as ExportToSpotifyResponse
+      // 수집한 잡을 병렬 전송한다. 각 잡은 완료 즉시 해당 플레이리스트 상태만 갱신하며,
+      // 한 플레이리스트의 실패가 다른 플레이리스트의 성공/실패 표시를 가리지 않는다.
+      await Promise.all(
+        jobs.map(async (job) => {
+          try {
+            const res = (await chrome.runtime.sendMessage({
+              type: 'EXPORT_TO_SPOTIFY',
+              payload: job.payload,
+            })) as ExportToSpotifyResponse
 
-      if (res.ok) {
-        setExportSucceeded(true)
-      } else {
-        setExportError(res.error)
-      }
-    } catch (e) {
-      setExportError(e instanceof Error ? e.message : String(e))
+            setExportStatuses((prev) => ({
+              ...prev,
+              [job.playlistSeq]: res.ok
+                ? { status: 'success', exportedCount: job.payload.track_ids.length }
+                : { status: 'error', error: res.error },
+            }))
+          } catch (e) {
+            setExportStatuses((prev) => ({
+              ...prev,
+              [job.playlistSeq]: {
+                status: 'error',
+                error: e instanceof Error ? e.message : String(e),
+              },
+            }))
+          }
+        }),
+      )
     } finally {
-      setExporting(false)
+      setExportingAll(false)
     }
   }
 
@@ -454,9 +597,28 @@ export function App() {
 
   const btn =
     'cursor-pointer rounded-lg border-none bg-indigo-500 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-default disabled:opacity-50'
-  // 자동 포함(후보 1개) + 사용자 선택(후보 2개+) 합계
-  const exportCount = preview ? buildExportTrackIds(preview, selected).length : 0
-  const autoIncludedCount = preview?.filter((row) => row.results.length === 1).length ?? 0
+  // 선택된 플레이리스트(추출 순서 유지) 및 플레이리스트별 그룹화된 preview
+  const selectedPlaylistList =
+    result?.playlists.filter((playlist) => selectedPlaylists.has(playlist.seq)) ?? []
+  // 선택 플레이리스트 × 선택 곡만 남긴 실제 요청 대상
+  const chosenPlaylists = selectedPlaylistList
+    .map((pl) => ({
+      ...pl,
+      songs: pl.songs.filter((s) => selectedSongs.has(songSelectionKey(pl.seq, s.songId))),
+    }))
+    .filter((pl) => pl.songs.length > 0)
+  const effectiveSongCount = chosenPlaylists.reduce((sum, pl) => sum + pl.songs.length, 0)
+  const previewGroups: PlaylistPreviewGroup[] =
+    preview && selectedPlaylistList.length > 0
+      ? groupPreviewByPlaylist(selectedPlaylistList, preview)
+      : []
+  const exportJobs = buildPlaylistExportJobs(previewGroups, selected)
+  // 자동 포함(후보 1개) + 사용자 선택(후보 2개+) 전체 합계
+  const exportCount = exportJobs.reduce((sum, job) => sum + job.payload.track_ids.length, 0)
+  const autoIncludedCount = previewGroups.reduce(
+    (sum, group) => sum + group.rows.filter((row) => row.results.length === 1).length,
+    0,
+  )
 
   if (screen === 'main') {
     return <MainScreen onStart={() => setScreen('guide')} />
@@ -702,43 +864,92 @@ export function App() {
       {error && <p className="text-red-600">{error}</p>}
       {result && (
         <div className="mt-3">
-          <p>플레이리스트 {result.playlists.length}개</p>
-          <button onClick={handleUpload} disabled={uploading} className={btn}>
-            {uploading ? '매칭 중...' : 'Spotify 매칭 미리보기'}
+          <div className="mb-1 flex items-center justify-between">
+            <p className="m-0">
+              플레이리스트 {result.playlists.length}개 (선택 {selectedPlaylists.size}개)
+            </p>
+            <button
+              type="button"
+              onClick={toggleAllPlaylists}
+              className="border-none bg-transparent p-0 text-xs text-gray-500 underline"
+            >
+              {selectedPlaylists.size === result.playlists.length ? '전체 해제' : '전체 선택'}
+            </button>
+          </div>
+          <button
+            onClick={handleUpload}
+            disabled={uploading || effectiveSongCount === 0}
+            className={btn}
+          >
+            {uploading
+              ? '매칭 중...'
+              : `선택 ${selectedPlaylists.size}개 · ${effectiveSongCount}곡 매칭 미리보기`}
           </button>
           {uploadError && <p className="text-red-600">매칭 실패: {uploadError}</p>}
-          {result.playlists.map((pl) => (
-            <details key={pl.seq} className="mb-2">
-              <summary>
-                {pl.title} ({pl.songCount}곡)
-              </summary>
-              <ol className="my-1 list-decimal pl-5">
-                {pl.songs.map((s) => (
-                  <li key={s.songId}>
-                    {s.title} — {s.artist}
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ))}
+          {result.playlists.map((pl) => {
+            const playlistOn = selectedPlaylists.has(pl.seq)
+            const selectedSongCount = pl.songs.filter((s) =>
+              selectedSongs.has(songSelectionKey(pl.seq, s.songId)),
+            ).length
+            const allSongsOn = pl.songs.length > 0 && selectedSongCount === pl.songs.length
+
+            return (
+              <div key={pl.seq} className="mb-2 flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={playlistOn}
+                  onChange={() => togglePlaylist(pl.seq)}
+                />
+                <details className="flex-1">
+                  <summary>
+                    {pl.title} ({selectedSongCount}/{pl.songCount}곡)
+                  </summary>
+                  {playlistOn && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAllSongs(pl)}
+                      className="mt-1 border-none bg-transparent p-0 text-[11px] text-gray-500 underline"
+                    >
+                      {allSongsOn ? '곡 전체 해제' : '곡 전체 선택'}
+                    </button>
+                  )}
+                  <ul className="my-1 list-none pl-1">
+                    {pl.songs.map((s) => (
+                      <li key={s.songId}>
+                        <label className="flex items-center gap-2 py-0.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={selectedSongs.has(songSelectionKey(pl.seq, s.songId))}
+                            disabled={!playlistOn}
+                            onChange={() => toggleSong(pl.seq, s.songId)}
+                          />
+                          <span className={playlistOn ? '' : 'text-gray-400'}>
+                            {s.title} — {s.artist}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            )
+          })}
         </div>
       )}
 
       {preview && (
         <SpotifyPreviewPanel
           btnClassName={btn}
-          exporting={exporting}
-          exportError={exportError}
-          exportSucceeded={exportSucceeded}
-          playlistName={playlistName}
-          preview={preview}
+          exportingAll={exportingAll}
+          exportStatuses={exportStatuses}
+          groups={previewGroups}
           selected={selected}
           totalCount={exportCount}
           autoIncludedCount={autoIncludedCount}
           spotifyLoggedIn={spotifyLoggedIn}
           onClearSelection={clearSelection}
-          onExport={handleExport}
-          onPlaylistNameChange={setPlaylistName}
+          onExportAll={handleExport}
           onSelectTrack={selectTrack}
         />
       )}
