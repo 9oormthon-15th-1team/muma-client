@@ -1,6 +1,13 @@
-import type { ExtractResult, MelonTrackRequest } from './types'
-
-export const MELON_PREVIEW_API_URL = 'http://192.168.0.22:8080/api/melon/preview'
+import type {
+  ExtractResult,
+  MelonTrackRequest,
+  MelonTrackResult,
+  SpotifyExportRequest,
+} from './types'
+import {
+  exportToSpotify as requestSpotifyExport,
+  previewMelonTracks,
+} from '../api/client'
 
 function parseLikes(value: string | undefined): number {
   const parsed = Number((value ?? '').replace(/,/g, '').trim())
@@ -32,17 +39,14 @@ export function mapExtractResultToMelonTracks(result: ExtractResult): MelonTrack
   )
 }
 
-export async function uploadMelonTracks(tracks: MelonTrackRequest[]): Promise<unknown> {
-  const res = await fetch(MELON_PREVIEW_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(tracks),
-  })
+export async function uploadMelonTracks(tracks: MelonTrackRequest[]): Promise<MelonTrackResult[]> {
+  const response = await previewMelonTracks(tracks)
+  return response.data ?? []
+}
 
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`업로드 실패: HTTP ${res.status} ${text}`.trim())
-  }
-
-  return res.json()
+export async function exportToSpotify(
+  spotifyToken: string,
+  payload: SpotifyExportRequest,
+): Promise<void> {
+  await requestSpotifyExport(spotifyToken, payload)
 }

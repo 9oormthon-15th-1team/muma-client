@@ -35,13 +35,49 @@ export interface MelonTrackRequest {
   melon_song_url: string
 }
 
+/** preview 응답: 멜론 곡 1개에 매칭된 Spotify 후보 트랙 */
+export interface SpotifyTrack {
+  id: string
+  name: string
+  duration_ms: number
+  explicit: boolean
+  popularity?: number
+  artists: { id: string; name: string }[]
+  album: {
+    id: string
+    name: string
+    release_date?: string
+    images?: { url: string; height: number; width: number }[]
+  }
+}
+
+/** preview 응답 1행: 요청 곡 정보 + Spotify 후보 목록(상위 N개) */
+export interface MelonTrackResult extends MelonTrackRequest {
+  results: SpotifyTrack[]
+}
+
+/** Spotify 플레이리스트 내보내기 요청 본문 */
+export interface SpotifyExportRequest {
+  playlist_name: string
+  track_ids: string[]
+}
+
 export interface UploadMelonTracksRequest {
   type: 'UPLOAD_MELON_TRACKS'
   tracks: MelonTrackRequest[]
 }
 
 export type UploadMelonTracksResponse =
-  | { ok: true; result: unknown }
+  | { ok: true; result: MelonTrackResult[] }
+  | { ok: false; error: string }
+
+export interface ExportToSpotifyRequest {
+  type: 'EXPORT_TO_SPOTIFY'
+  payload: SpotifyExportRequest
+}
+
+export type ExportToSpotifyResponse =
+  | { ok: true }
   | { ok: false; error: string }
 
 export type MelonSessionStatus =

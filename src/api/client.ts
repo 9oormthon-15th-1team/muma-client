@@ -1,8 +1,20 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL as string
+import type {
+  MelonTrackRequest,
+  MelonTrackResult,
+  SpotifyExportRequest,
+} from '../lib/types'
 
-interface ApiResponse<T = void> {
+export interface ApiResponse<T = void> {
   meta: { code: string; message?: string }
   data?: T
+}
+
+function getBaseUrl(): string {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL
+  if (!baseUrl) {
+    throw new Error('VITE_API_BASE_URL is not configured')
+  }
+  return baseUrl.replace(/\/$/, '')
 }
 
 async function request<T>(
@@ -13,14 +25,14 @@ async function request<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...customHeaders as Record<string, string>,
+    ...(customHeaders as Record<string, string>),
   }
 
   if (spotifyToken) {
     headers['X-Muma-Spotify-Token'] = spotifyToken
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(`${getBaseUrl()}${path}`, {
     ...fetchOptions,
     headers,
   })
@@ -33,47 +45,11 @@ async function request<T>(
   return response.json()
 }
 
-// --- Melon ---
-
-export interface MelonTrackRequest {
-  playlist_id: string
-  position: number
-  melon_song_id: string
-  title: string
-  artists_text: string
-  melon_artist_ids: string
-  album_title: string
-  melon_album_id: string
-  melon_likes: number
-  melon_song_url: string
-}
-
-export interface SpotifyTrack {
-  id: string
-  name: string
-  duration_ms: number
-  explicit: boolean
-  popularity?: number
-  artists: { id: string; name: string }[]
-  album: { id: string; name: string; release_date: string }
-}
-
-export interface MelonTrackResult extends MelonTrackRequest {
-  results: SpotifyTrack[]
-}
-
 export function previewMelonTracks(tracks: MelonTrackRequest[]) {
   return request<MelonTrackResult[]>('/api/melon/preview', {
     method: 'POST',
     body: JSON.stringify(tracks),
   })
-}
-
-// --- Spotify Export ---
-
-export interface SpotifyExportRequest {
-  playlist_name: string
-  track_ids: string[]
 }
 
 export function exportToSpotify(spotifyToken: string, data: SpotifyExportRequest) {

@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ExtractResult, MelonTrackRequest } from './types'
-import { mapExtractResultToMelonTracks, uploadMelonTracks } from './melonUpload'
+import { exportToSpotify, mapExtractResultToMelonTracks, uploadMelonTracks } from './melonUpload'
 
 const result: ExtractResult = {
   extractedAt: '2026-06-03T00:00:00.000Z',
@@ -91,22 +91,28 @@ describe('mapExtractResultToMelonTracks', () => {
 })
 
 describe('uploadMelonTracks', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
+  beforeEach(() => {
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test')
   })
 
-  test('멜론 트랙 배열을 preview API로 JSON 전송한다', async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  test('멜론 트랙 배열을 API 클라이언트로 JSON 전송하고 data를 반환한다', async () => {
+    const data = [{ melon_song_id: '1', results: [] }]
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ meta: { code: 'OK' }, data: [] }),
+      json: async () => ({ meta: { code: 'OK' }, data }),
     })
     vi.stubGlobal('fetch', fetch)
     const tracks = mapExtractResultToMelonTracks(result)
 
     const response = await uploadMelonTracks(tracks)
 
-    expect(response).toEqual({ meta: { code: 'OK' }, data: [] })
-    expect(fetch).toHaveBeenCalledWith('http://192.168.0.22:8080/api/melon/preview', {
+    expect(response).toEqual(data)
+    expect(fetch).toHaveBeenCalledWith('https://api.example.test/api/melon/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tracks),
@@ -123,6 +129,31 @@ describe('uploadMelonTracks', () => {
       }),
     )
 
-    await expect(uploadMelonTracks([])).rejects.toThrow('업로드 실패: HTTP 500 server error')
+    await expect(uploadMelonTracks([])).rejects.toThrow('API error 500: server error')
+  })
+
+  test('Spotify export는 API 클라이언트로 토큰 헤더와 선택 곡을 전송한다', async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ meta: { code: 'OK' } }),
+    })
+    vi.stubGlobal('fetch', fetch)
+
+    await exportToSpotify('spotify-token', {
+      playlist_name: 'My Muma Playlist',
+      track_ids: ['spotify:track:1', 'spotify:track:2'],
+    })
+
+    expect(fetch).toHaveBeenCalledWith('https://api.example.test/api/spotify/export', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Muma-Spotify-Token': 'spotify-token',
+      },
+      body: JSON.stringify({
+        playlist_name: 'My Muma Playlist',
+        track_ids: ['spotify:track:1', 'spotify:track:2'],
+      }),
+    })
   })
 })
