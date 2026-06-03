@@ -11,6 +11,16 @@ import type {
 } from '../lib/types'
 import { mapExtractResultToMelonTracks } from '../lib/melonUpload'
 import { memberKeyFromMlcp } from '../lib/melonClient'
+import { MainScreen } from './screens/MainScreen'
+import { GuideScreen } from './screens/GuideScreen'
+import { LoadingScreen } from './screens/LoadingScreen'
+import { SelectScreen } from './screens/SelectScreen'
+import { PlatformScreen } from './screens/PlatformScreen'
+import { MatchingScreen } from './screens/MatchingScreen'
+import { ReviewScreen } from './screens/ReviewScreen'
+import { CompleteScreen } from './screens/CompleteScreen'
+
+type Screen = 'main' | 'guide' | 'loading' | 'select' | 'platform' | 'matching' | 'review' | 'complete' | 'app'
 
 const MELON_PLAYLIST_LIST_URL = 'https://www.melon.com/mymusic/playlist/mymusicplaylist_list.htm'
 
@@ -196,6 +206,7 @@ function SpotifyPreviewPanel({
 }
 
 export function App() {
+  const [screen, setScreen] = useState<Screen>('main')
   const [status, setStatus] = useState<PopupStatus>('checking')
   const [session, setSession] = useState<MelonSessionResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -274,6 +285,24 @@ export function App() {
       if (res?.loggedIn) setSpotifyLoggedIn(true)
     })
   }, [])
+
+  // 로딩 완료 시 선택 화면으로 자동 전환
+  useEffect(() => {
+    if (screen === 'loading' && result && !loading) {
+      const timer = setTimeout(() => setScreen('select'), 600)
+      return () => clearTimeout(timer)
+    }
+  }, [screen, result, loading])
+
+  // 매칭 완료 시 review 또는 app 화면으로 자동 전환
+  useEffect(() => {
+    if (screen === 'matching' && preview && !uploading) {
+      const ambiguous = preview.filter((r) => r.results.length >= 2)
+      const nextScreen = ambiguous.length > 0 ? 'review' : 'app'
+      const timer = setTimeout(() => setScreen(nextScreen), 600)
+      return () => clearTimeout(timer)
+    }
+  }, [screen, preview, uploading])
 
   async function handleExtract() {
     setLoading(true)
@@ -428,6 +457,159 @@ export function App() {
   // 자동 포함(후보 1개) + 사용자 선택(후보 2개+) 합계
   const exportCount = preview ? buildExportTrackIds(preview, selected).length : 0
   const autoIncludedCount = preview?.filter((row) => row.results.length === 1).length ?? 0
+
+  if (screen === 'main') {
+    return <MainScreen onStart={() => setScreen('guide')} />
+  }
+
+  if (screen === 'guide') {
+    return (
+      <GuideScreen
+        onBack={() => setScreen('main')}
+        onNext={() => {
+          setScreen('loading')
+          void handleExtract()
+        }}
+      />
+    )
+  }
+
+  if (screen === 'loading') {
+    const loadingSteps = [
+      { label: '계정연결', done: status === 'ready' || !!result },
+      { label: '플레이리스트 목록', done: !!result },
+      { label: '상세곡들', done: !!result && result.playlists.every((pl) => pl.songs.length > 0) },
+    ]
+    const playlistCount = result?.playlists.length ?? 0
+    const allDone = loadingSteps.every((s) => s.done)
+    const progress = loadingSteps.filter((s) => s.done).length / loadingSteps.length * 100
+
+    if (allDone) {
+      return (
+        <LoadingScreen
+          onBack={() => setScreen('guide')}
+          count={playlistCount}
+          progress={100}
+          statusMessage="완료! 다음 단계로 이동합니다."
+          steps={loadingSteps}
+        />
+      )
+    }
+
+    return (
+      <LoadingScreen
+        onBack={() => setScreen('guide')}
+        count={playlistCount}
+        progress={loading ? Math.max(progress, 15) : progress}
+        statusMessage={
+          error
+            ? error
+            : loading
+              ? '멜론 계정에 저장된 플레이리스트를 확인하고 있어요.'
+              : '준비 중...'
+        }
+        steps={loadingSteps}
+      />
+    )
+  }
+
+  if (screen === 'select' && result) {
+    return (
+      <SelectScreen
+        playlists={result.playlists}
+        onBack={() => setScreen('guide')}
+        onNext={(selectedSeqs) => {
+          // 선택된 플레이리스트만 필터링하여 result 업데이트 후 app 화면으로
+          const filtered = result.playlists.filter((pl) => selectedSeqs.has(pl.seq))
+          setResult({ ...result, playlists: filtered })
+          setScreen('platform')
+        }}
+      />
+    )
+  }
+
+  if (screen === 'platform') {
+    return (
+      <PlatformScreen
+        onBack={() => setScreen('select')}
+        onNext={(platform) => {
+          if (platform === 'spotify') {
+            // Spotify 로그인 확인 후 매칭 시작
+            if (spotifyLoggedIn) {
+              setScreen('matching')
+              void handleUpload()
+            } else {
+              // OAuth 로그인 트리거 → 성공 시 매칭 진행
+              setSpotifyLoading(true)
+              chrome.runtime.sendMessage({ type: 'SPOTIFY_LOGIN' }, (res) => {
+                setSpotifyLoading(false)
+                if (res?.success) {
+                  setSpotifyLoggedIn(true)
+                  setScreen('matching')
+                  void handleUpload()
+                } else {
+                  setSpotifyError(res?.error ?? 'Login failed')
+                }
+              })
+            }
+          }
+        }}
+      />
+    )
+  }
+
+  if (screen === 'matching') {
+    const totalSongs = result?.playlists.reduce((sum, pl) => sum + pl.songCount, 0) ?? 0
+    const matchedCount = preview?.filter((r) => r.results.length > 0).length ?? 0
+    const processingCount = uploading ? Math.max(totalSongs - matchedCount, 0) : 0
+    const matchProgress = totalSongs > 0 ? (matchedCount / totalSongs) * 100 : 0
+
+    return (
+      <MatchingScreen
+        onBack={() => setScreen('platform')}
+        playlistCount={result?.playlists.length ?? 0}
+        totalSongs={totalSongs}
+        matchedCount={matchedCount}
+        processingCount={processingCount}
+        progress={uploading ? Math.max(matchProgress, 10) : matchProgress}
+      />
+    )
+  }
+
+  if (screen === 'review' && preview) {
+    const ambiguous = preview
+      .filter((r) => r.results.length >= 2)
+      .sort((a, b) => a.position - b.position)
+    const autoMatched = preview.filter((r) => r.results.length === 1).length
+
+    return (
+      <ReviewScreen
+        onBack={() => setScreen('matching')}
+        tracks={ambiguous}
+        autoMatchedCount={autoMatched}
+        onNext={(reviewSelected) => {
+          setSelected(reviewSelected)
+          // 후보 선택 완료 → 내보내기 실행
+          void handleExport()
+          setScreen('complete')
+        }}
+      />
+    )
+  }
+
+  if (screen === 'complete') {
+    const totalSongs = result?.playlists.reduce((sum, pl) => sum + pl.songCount, 0) ?? 0
+    const exportedCount = preview ? buildExportTrackIds(preview, selected).length : 0
+
+    return (
+      <CompleteScreen
+        onBack={() => setScreen('review')}
+        playlistCount={result?.playlists.length ?? 0}
+        songCount={exportedCount}
+        totalSelected={totalSongs}
+      />
+    )
+  }
 
   return (
     <main className="w-90 p-4 font-sans">
