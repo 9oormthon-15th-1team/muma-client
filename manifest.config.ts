@@ -45,4 +45,5 @@ export default defineManifest({
   },
 
   permissions: ['storage', 'activeTab'],
+  host_permissions: ['http://192.168.0.22:8080/*'],
 })

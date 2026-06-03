@@ -1,14 +1,37 @@
-import { extractAll } from '../lib/melonClient'
-import type { ExtractAllRequest, ExtractAllResponse } from '../lib/types'
+import { checkMelonSession, extractAll } from '../lib/melonClient'
+import type {
+  CheckMelonSessionResponse,
+  ContentRequest,
+  ExtractAllResponse,
+} from '../lib/types'
 
 chrome.runtime.onMessage.addListener(
-  (msg: ExtractAllRequest, _sender, sendResponse: (r: ExtractAllResponse) => void) => {
+  (
+    msg: ContentRequest,
+    _sender,
+    sendResponse: (r: CheckMelonSessionResponse | ExtractAllResponse) => void,
+  ) => {
+    if (msg?.type === 'CHECK_MELON_SESSION') {
+      console.info('[muma] CHECK_MELON_SESSION received', {
+        href: location.href,
+        readyState: document.readyState,
+      })
+      checkMelonSession()
+        .then((result) => sendResponse({ ok: true, result }))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err)
+          console.error('[muma] CHECK_MELON_SESSION failed', err)
+          sendResponse({ ok: false, error: message })
+        })
+      return true
+    }
+
     if (msg?.type !== 'EXTRACT_ALL') return
     console.info('[muma] EXTRACT_ALL received', {
       href: location.href,
       readyState: document.readyState,
     })
-    extractAll(msg.playlistSeq)
+    extractAll()
       .then((result) => {
         console.info('[muma] EXTRACT_ALL completed', {
           playlistCount: result.playlists.length,
