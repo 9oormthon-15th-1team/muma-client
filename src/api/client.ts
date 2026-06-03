@@ -9,6 +9,32 @@ export interface ApiResponse<T = void> {
   data?: T
 }
 
+// 가드레일: 병렬로 호출되는 /preview·/export 요청이 브라우저/서버를 한꺼번에 때리지 않도록
+// 동시 in-flight 요청 수를 제한하고, 응답이 없을 때 무한 대기하지 않도록 타임아웃을 건다.
+const MAX_CONCURRENT_REQUESTS = 4
+const REQUEST_TIMEOUT_MS = 15000
+
+let activeRequests = 0
+const waiters: Array<() => void> = []
+
+function acquireSlot(): Promise<void> {
+  if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+    activeRequests += 1
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    waiters.push(() => {
+      activeRequests += 1
+      resolve()
+    })
+  })
+}
+
+function releaseSlot(): void {
+  activeRequests -= 1
+  waiters.shift()?.()
+}
+
 function getBaseUrl(): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL
   if (!baseUrl) {
@@ -32,17 +58,33 @@ async function request<T>(
     headers['X-Muma-Spotify-Token'] = spotifyToken
   }
 
-  const response = await fetch(`${getBaseUrl()}${path}`, {
-    ...fetchOptions,
-    headers,
-  })
+  // 슬롯을 먼저 확보한 뒤 타임아웃을 시작한다 — 대기 큐에서 머문 시간은 타임아웃에 포함하지 않는다.
+  await acquireSlot()
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`API error ${response.status}: ${text}`)
+  try {
+    const response = await fetch(`${getBaseUrl()}${path}`, {
+      ...fetchOptions,
+      headers,
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`API error ${response.status}: ${text}`)
+    }
+
+    return await response.json()
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error(`API timeout: ${path} (${REQUEST_TIMEOUT_MS}ms 초과)`)
+    }
+    throw e
+  } finally {
+    clearTimeout(timeoutId)
+    releaseSlot()
   }
-
-  return response.json()
 }
 
 export function previewMelonTracks(tracks: MelonTrackRequest[]) {

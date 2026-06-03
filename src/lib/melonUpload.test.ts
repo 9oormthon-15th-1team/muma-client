@@ -160,6 +160,7 @@ describe('uploadMelonTracks', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tracks),
+      signal: expect.any(AbortSignal),
     })
   })
 
@@ -198,6 +199,7 @@ describe('uploadMelonTracks', () => {
         playlist_name: 'My Muma Playlist',
         track_ids: ['spotify:track:1', 'spotify:track:2'],
       }),
+      signal: expect.any(AbortSignal),
     })
   })
 })
