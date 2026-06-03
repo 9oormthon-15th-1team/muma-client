@@ -9,10 +9,10 @@ export default defineConfig({
   plugins: [react(), crx({ manifest })],
   server: {
     // CRXJS HMR을 위한 고정 포트 (콘텐츠 스크립트 HMR 안정화)
-    port: 5173,
+    port: 5175,
     strictPort: true,
     hmr: {
-      port: 5173,
+      port: 5175,
     },
   },
 })
