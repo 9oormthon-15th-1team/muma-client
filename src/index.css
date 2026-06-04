@@ -5,8 +5,53 @@
   color-scheme: light dark;
   font-family: 'Pretendard Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
+  /* ===== Colors ===== */
+  /* Brand */
   --color-brand-primary: #ff6f21;
-  --color-bg-dark: #414745;
+  --color-brand-secondary: #ffebd4;
+
+  /* Background */
+  --color-bg-default: #3f4543;
   --color-bg-secondary: rgba(248, 250, 252, 0.2);
+  --color-bg-success: #f0fdf4;
+
+  /* Text */
+  --color-text-primary: #0b0b0b;
+  --color-text-secondary: #343a3a;
   --color-text-inverse: #ffffff;
+  --color-text-inverse-2: rgba(255, 255, 255, 0.6);
+  --color-text-warning: #fffbeb;
+
+  /* Action */
+  --color-action-disabled: #a0a0a0;
+
+  /* ===== Spacing ===== */
+  --spacing-4: 4px;
+  --spacing-8: 8px;
+  --spacing-12: 12px;
+  --spacing-16: 16px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  --spacing-40: 40px;
+  --spacing-48: 48px;
+  --spacing-56: 56px;
+
+  /* ===== Radius ===== */
+  --radius-4: 4px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --radius-20: 20px;
+  --radius-full: 9999px;
+
+  /* ===== Size Tokens ===== */
+  --size-icon-sm: 16px;
+  --size-icon-md: 20px;
+  --size-icon-lg: 32px;
+  --size-button-height: 48px;
+  --size-button-width: 340px;
+  --size-header-height: 56px;
+  --size-popup-width: 380px;
+  --size-popup-height: 560px;
+  --stroke-1: 1px;
 }
