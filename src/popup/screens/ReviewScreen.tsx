@@ -22,10 +22,10 @@ function CandidateRow({ candidate, isTopMatch, isSelected, onSelect }: {
     <button onClick={onSelect} className="flex cursor-pointer items-center gap-[var(--spacing-8)] border-none bg-transparent p-0 text-left">
       <CheckCircle checked={isSelected} />
       <div className="flex flex-col">
-        <span className={`text-[12px] font-semibold leading-[18px] ${isTopMatch || isSelected ? 'text-[var(--color-text-inverse)]' : 'text-[var(--color-text-warning)]'}`}>
+        <span className={`text-body-small-bold ${isTopMatch || isSelected ? 'text-[var(--color-text-inverse)]' : 'text-[var(--color-text-warning)]'}`}>
           {candidate.name}
         </span>
-        <span className="text-[11px] leading-4 text-[var(--color-text-inverse-2)]">
+        <span className="text-caption text-[var(--color-text-inverse-2)]">
           {artistsText} · {isTopMatch ? '정확히 일치' : '유사한 곡'}
         </span>
       </div>
@@ -40,9 +40,9 @@ function TrackCard({ track, selectedId, onSelect }: {
   const candidates = track.results.slice(0, MAX_CANDIDATES)
 
   return (
-    <div className={`shrink-0 overflow-hidden rounded-[var(--radius-12)] border ${hasSelection ? 'border-[rgba(255,111,33,0.5)]' : 'border-[var(--color-bg-secondary)]'}`}>
+    <div className={`glass shrink-0 overflow-hidden rounded-[var(--radius-12)] border bg-[var(--color-glass)] ${hasSelection ? 'border-[rgba(255,111,33,0.5)]' : 'border-[var(--color-bg-secondary)]'}`}>
       <div className={`px-[var(--spacing-20)] py-[var(--spacing-8)] ${hasSelection ? 'bg-[var(--color-brand-primary)]' : 'bg-[var(--color-bg-secondary)]'}`}>
-        <p className="m-0 text-[14px] font-semibold leading-[22px] text-[var(--color-text-inverse)]">{track.title}</p>
+        <p className="m-0 text-body-md-bold text-[var(--color-text-inverse)]">{track.title}</p>
         <p className="m-0 text-[12px] leading-4 text-[var(--color-text-inverse)]">{track.artists_text}</p>
       </div>
       <div className="flex flex-col gap-[var(--spacing-16)] p-[var(--spacing-16)]">
@@ -52,8 +52,8 @@ function TrackCard({ track, selectedId, onSelect }: {
         <button onClick={() => onSelect(SKIP_VALUE)} className="flex cursor-pointer items-center gap-[var(--spacing-8)] border-none bg-transparent p-0 text-left">
           <CheckCircle checked={selectedId === SKIP_VALUE} />
           <div className="flex flex-col">
-            <span className={`text-[12px] font-semibold leading-[18px] ${selectedId === SKIP_VALUE ? 'text-[var(--color-text-inverse)]' : 'text-[var(--color-text-warning)]'}`}>선택 안 함</span>
-            <span className="text-[11px] leading-4 text-[var(--color-text-inverse-2)]">이 곡은 옮기지 않을게요</span>
+            <span className={`text-body-small-bold ${selectedId === SKIP_VALUE ? 'text-[var(--color-text-inverse)]' : 'text-[var(--color-text-warning)]'}`}>선택 안 함</span>
+            <span className="text-caption text-[var(--color-text-inverse-2)]">이 곡은 옮기지 않을게요</span>
           </div>
         </button>
       </div>

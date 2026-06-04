@@ -41,7 +41,7 @@ export function CompleteScreen({ onBack, playlistCount, songCount, totalSelected
 
       <div className="flex w-full shrink-0 flex-col gap-[var(--spacing-4)]">
         <div className="h-1 w-full rounded-[var(--radius-full)] bg-[var(--color-brand-primary)]" />
-        <p className="m-0 text-[12px] font-semibold leading-[18px] text-[var(--color-action-disabled)]">
+        <p className="m-0 text-body-small-bold text-[var(--color-action-disabled)]">
           {playlistCount}개 플레이리스트 · {totalSelected}곡 선택됨
         </p>
       </div>

@@ -28,7 +28,7 @@ export function PrimaryButton({
   return (
     <button
       disabled={disabled}
-      className={`flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center gap-1 rounded-[var(--radius-12)] border-none text-[15px] font-semibold leading-[22px] ${variantStyles[resolved]} ${className}`}
+      className={`flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center gap-1 rounded-[var(--radius-12)] border-none text-body ${variantStyles[resolved]} ${className}`}
       {...props}
     >
       {children}

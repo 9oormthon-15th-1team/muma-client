@@ -33,15 +33,15 @@ export function GuideScreen({ onBack, onNext }: GuideScreenProps) {
       </div>
 
       {/* Steps card */}
-      <div className="flex w-full flex-col gap-[var(--spacing-8)] rounded-[var(--radius-12)] border border-[var(--color-bg-secondary)] p-[var(--spacing-16)]">
+      <div className="glass flex w-full flex-col gap-[var(--spacing-8)] rounded-[var(--radius-12)] border border-[var(--color-bg-secondary)] bg-[var(--color-glass)] p-[var(--spacing-16)]">
         {STEPS.map((step, i) => (
           <div key={i} className="flex items-start gap-[var(--spacing-8)]">
             <div className="flex size-5 shrink-0 items-center justify-center rounded-[10px] bg-white">
-              <span className="text-[11px] font-semibold leading-4 text-[var(--color-text-secondary)]">{i + 1}</span>
+              <span className="text-caption-bold text-[var(--color-text-secondary)]">{i + 1}</span>
             </div>
             <div className="flex flex-col gap-[var(--spacing-4)]">
-              <p className="m-0 text-[12px] font-semibold leading-[18px] text-[var(--color-text-inverse)]">{step.title}</p>
-              <p className="m-0 text-[12px] leading-[18px] text-[var(--color-text-inverse-2)]">{step.desc}</p>
+              <p className="m-0 text-body-small-bold text-[var(--color-text-inverse)]">{step.title}</p>
+              <p className="m-0 text-body-small text-[var(--color-text-inverse-2)]">{step.desc}</p>
             </div>
           </div>
         ))}

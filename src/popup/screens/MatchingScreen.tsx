@@ -44,7 +44,7 @@ export function MatchingScreen({ onBack, playlistCount, totalSongs, matchedCount
         <div className="h-1 w-full overflow-hidden rounded-[var(--radius-full)] bg-[var(--color-bg-secondary)]">
           <div className="h-1 rounded-[var(--radius-full)] bg-[var(--color-brand-primary)] transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
-        <p className="m-0 text-[12px] font-semibold leading-[18px] text-[var(--color-action-disabled)]">
+        <p className="m-0 text-body-small-bold text-[var(--color-action-disabled)]">
           {playlistCount}개 플레이리스트 · {totalSongs}곡 선택됨
         </p>
       </div>
@@ -55,7 +55,7 @@ export function MatchingScreen({ onBack, playlistCount, totalSongs, matchedCount
       </div>
 
       <div className="flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center">
-        <span className="text-[15px] font-semibold leading-[22px] text-[var(--color-bg-secondary)]">창을 닫지 말고 잠시만 기다려주세요...</span>
+        <span className="text-body text-[var(--color-bg-secondary)]">창을 닫지 말고 잠시만 기다려주세요...</span>
       </div>
     </ScreenLayout>
   )

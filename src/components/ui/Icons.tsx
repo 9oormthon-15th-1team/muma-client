@@ -1,25 +1,27 @@
-/** Back arrow icon button (32x32) */
+/** Back button (32x32) — glass surface */
 export function IconBack({ onClick }: { onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex size-[var(--size-icon-lg)] cursor-pointer items-center justify-center rounded-[9px] border-none bg-[var(--color-bg-secondary)]"
+      className="glass flex size-[var(--size-icon-lg)] cursor-pointer items-center justify-center rounded-[var(--radius-9)] border-none bg-[var(--color-bg-secondary)]"
     >
       <img src="/assets/icon-back.svg" alt="뒤로" className="size-[var(--size-icon-md)]" />
     </button>
   )
 }
 
-/** Expand/collapse arrow button (40x40) */
+/** Expand/collapse button (32x32) — glass surface */
 export function IconArrow({ expanded, onClick }: { expanded: boolean; onClick?: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`flex size-10 cursor-pointer items-center justify-center rounded-[9px] border-none bg-[var(--color-bg-secondary)] transition-transform ${
-        expanded ? '' : 'rotate-180'
-      }`}
+      className="glass flex size-[var(--size-icon-lg)] cursor-pointer items-center justify-center rounded-[var(--radius-9)] border-none bg-[var(--color-bg-secondary)]"
     >
-      <img src="/assets/icon-arrow-down.svg" alt="" className="size-[var(--size-icon-md)] -rotate-90" />
+      <img
+        src={expanded ? '/assets/icon-chevron-down.svg' : '/assets/icon-chevron-up.svg'}
+        alt=""
+        className="size-[var(--size-icon-md)]"
+      />
     </button>
   )
 }

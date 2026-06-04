@@ -40,8 +40,8 @@ function PlaylistCard({
     playlist.songs.every((s) => selectedSongs.has(songSelectionKey(playlist.seq, s.songId)))
 
   return (
-    <div className={`flex shrink-0 flex-col gap-[var(--spacing-12)] rounded-[var(--radius-12)] border px-[var(--spacing-16)] py-[var(--spacing-12)] ${
-      selected ? 'border-[var(--color-brand-primary)] bg-[rgba(248,250,252,0.1)]' : 'border-[var(--color-bg-secondary)]'
+    <div className={`glass flex shrink-0 flex-col gap-[var(--spacing-12)] rounded-[var(--radius-12)] border px-[var(--spacing-16)] py-[var(--spacing-12)] ${
+      selected ? 'border-[var(--color-brand-primary)] bg-[rgba(248,250,252,0.1)]' : 'border-[var(--color-bg-secondary)] bg-[var(--color-glass)]'
     }`}>
       <div className={`flex items-center py-[var(--spacing-4)] ${expanded ? 'border-b border-[var(--color-bg-secondary)]' : ''}`}>
         <div className="flex flex-1 items-center gap-[var(--spacing-8)] py-[var(--spacing-4)]">
@@ -49,8 +49,8 @@ function PlaylistCard({
             <CheckCircle checked={selected} />
           </button>
           <div className="flex flex-col gap-[var(--spacing-4)]">
-            <span className="text-[12px] font-semibold leading-[18px] text-[var(--color-text-inverse)]">{playlist.title}</span>
-            <span className="text-[11px] leading-4 text-[var(--color-text-inverse)]">{playlist.songCount}곡</span>
+            <span className="text-body-small-bold text-[var(--color-text-inverse)]">{playlist.title}</span>
+            <span className="text-caption text-[var(--color-text-inverse)]">{playlist.songCount}곡</span>
           </div>
         </div>
         <IconArrow expanded={expanded} onClick={onExpand} />
@@ -63,7 +63,7 @@ function PlaylistCard({
             className="flex cursor-pointer items-center gap-[var(--spacing-8)] border-none bg-transparent p-0 text-left"
           >
             <CheckCircle checked={allSongsSelected} size={16} />
-            <span className="text-[12px] font-semibold leading-[18px] text-[var(--color-brand-primary)]">
+            <span className="text-body-small-bold text-[var(--color-brand-primary)]">
               곡 전체선택
             </span>
           </button>
@@ -77,7 +77,7 @@ function PlaylistCard({
                 checked={selectedSongs.has(songSelectionKey(playlist.seq, song.songId))}
                 size={16}
               />
-              <span className="text-[12px] leading-[18px] text-[var(--color-text-inverse)]">
+              <span className="text-body-small text-[var(--color-text-inverse)]">
                 {song.title}
               </span>
             </button>
@@ -129,7 +129,7 @@ export function SelectScreen({
         <div className="flex items-center justify-between border-b border-[var(--color-bg-secondary)] py-[var(--spacing-8)]">
           <button onClick={onToggleAllPlaylists} className="flex cursor-pointer items-center gap-[var(--spacing-8)] border-none bg-transparent p-0">
             <CheckCircle checked={allSelected} />
-            <span className="text-[12px] font-semibold leading-[18px] text-[var(--color-text-inverse)]">전체선택</span>
+            <span className="text-body-small-bold text-[var(--color-text-inverse)]">전체선택</span>
           </button>
           <SelectionBadge count={selectedPlaylists.size} />
         </div>
@@ -148,7 +148,7 @@ export function SelectScreen({
         ))}
       </div>
 
-      <p className="m-0 shrink-0 text-center text-[12px] font-semibold leading-[18px] text-[var(--color-text-inverse)]">
+      <p className="m-0 shrink-0 text-center text-body-small-bold text-[var(--color-text-inverse)]">
         {selectedPlaylists.size}개 플레이리스트 · {selectedSongCount}곡 선택됨
       </p>
 

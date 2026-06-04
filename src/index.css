@@ -40,6 +40,7 @@
   /* ===== Radius ===== */
   --radius-4: 4px;
   --radius-8: 8px;
+  --radius-9: 9px;
   --radius-12: 12px;
   --radius-20: 20px;
   --radius-full: 9999px;
@@ -54,4 +55,41 @@
   --size-popup-width: 380px;
   --size-popup-height: 560px;
   --stroke-1: 1px;
+
+  /* ===== Glass (effect/card) — glassmorphism "golden recipe" ===== */
+  --color-glass: rgba(255, 255, 255, 0.07); /* airy translucent fill — define by edge, not fill */
+  --glass-blur: 12px;
+  --glass-sheen: rgba(255, 255, 255, 0.35); /* bright top highlight */
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); /* soft elevation */
 }
+
+/* Ambient screen background — soft on-brand gradients give the glass cards
+   something to refract, so backdrop-blur reads as real glass instead of a flat panel. */
+.screen-bg {
+  background-color: var(--color-bg-default);
+  background-image:
+    radial-gradient(90% 60% at 12% -5%, rgba(255, 111, 33, 0.28), transparent 60%),
+    radial-gradient(85% 60% at 105% 30%, rgba(165, 185, 205, 0.18), transparent 55%),
+    radial-gradient(75% 55% at 55% 108%, rgba(255, 111, 33, 0.14), transparent 60%);
+}
+
+/* Frosted glass surface — pairs with a translucent fill + 1px light border + radius.
+   saturate() boosts the vibrancy of whatever shows through the blur.
+   No background/border here so per-state fills & borders stay in control. */
+.glass {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  box-shadow: inset 0 1px 0 0 var(--glass-sheen), var(--glass-shadow);
+}
+
+/* ===== Typography (Figma text styles) — font-size / line-height / weight ===== */
+.text-display        { font-size: 28px; line-height: 45px; font-weight: 200; }
+.text-logo           { font-size: 22px; line-height: 33px; font-weight: 700; }
+.text-heading-2      { font-size: 17px; line-height: 24px; font-weight: 700; }
+.text-body           { font-size: 15px; line-height: 22px; font-weight: 600; }
+.text-body-md-bold   { font-size: 14px; line-height: 22px; font-weight: 600; }
+.text-subtitle       { font-size: 13px; line-height: 21px; font-weight: 400; }
+.text-body-small     { font-size: 12px; line-height: 18px; font-weight: 400; }
+.text-body-small-bold{ font-size: 12px; line-height: 18px; font-weight: 600; }
+.text-caption        { font-size: 11px; line-height: 16px; font-weight: 400; }
+.text-caption-bold   { font-size: 11px; line-height: 16px; font-weight: 600; }

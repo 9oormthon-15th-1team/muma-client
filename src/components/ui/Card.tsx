@@ -12,17 +12,17 @@ interface StatCardProps {
 export function StatCard({ label, value, filled, accent, icon }: StatCardProps) {
   return (
     <div
-      className={`flex flex-1 flex-col gap-[var(--spacing-4)] rounded-[var(--radius-12)] border px-[var(--spacing-16)] py-[var(--spacing-12)] ${
+      className={`glass flex flex-1 flex-col gap-[var(--spacing-4)] rounded-[var(--radius-12)] border px-[var(--spacing-16)] py-[var(--spacing-12)] ${
         accent
           ? 'border-[var(--color-brand-primary)] bg-[var(--color-bg-secondary)]'
           : filled
             ? 'border-[var(--color-bg-secondary)] bg-[var(--color-bg-secondary)]'
-            : 'border-[var(--color-bg-secondary)]'
+            : 'border-[var(--color-bg-secondary)] bg-[var(--color-glass)]'
       }`}
     >
       {icon}
-      <span className="text-[12px] leading-[18px] text-[var(--color-text-inverse)]">{label}</span>
-      <span className="text-[15px] font-semibold leading-[22px] text-[var(--color-text-inverse)]">
+      <span className="text-body-small text-[var(--color-text-inverse)]">{label}</span>
+      <span className="text-body text-[var(--color-text-inverse)]">
         {value}
       </span>
     </div>
@@ -41,14 +41,14 @@ export function PlatformCard({ icon, label, selected, onClick }: PlatformCardPro
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 cursor-pointer flex-col items-center justify-center gap-[var(--spacing-4)] rounded-[var(--radius-12)] border p-[var(--spacing-16)] ${
+      className={`glass flex flex-1 cursor-pointer flex-col items-center justify-center gap-[var(--spacing-4)] rounded-[var(--radius-12)] border p-[var(--spacing-16)] ${
         selected
           ? 'border-[var(--color-brand-primary)] bg-[var(--color-bg-secondary)]'
-          : 'border-[var(--color-action-disabled)] bg-transparent'
+          : 'border-[var(--color-action-disabled)] bg-[var(--color-glass)]'
       }`}
     >
       <img src={icon} alt="" className="size-6" />
-      <span className="text-[17px] font-bold leading-[24px] text-[var(--color-text-inverse)]">
+      <span className="text-heading-2 text-[var(--color-text-inverse)]">
         {label}
       </span>
     </button>

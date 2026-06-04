@@ -17,14 +17,14 @@ export function MainScreen({ onStart }: MainScreenProps) {
       {/* Top: line + MuMa branding */}
       <div className="absolute right-[var(--spacing-20)] top-[var(--spacing-20)] flex flex-col items-end gap-[var(--spacing-4)]">
         <img src="/assets/line-top.svg" alt="" className="w-[339px]" />
-        <p className="text-[22px] font-bold leading-[33px] text-[var(--color-brand-primary)]">
+        <p className="text-logo text-[var(--color-brand-primary)]">
           MuMa
         </p>
       </div>
 
       {/* Bottom: headline + CTA */}
       <div className="absolute bottom-0 left-0 flex w-full flex-col gap-[var(--spacing-24)] px-[var(--spacing-20)] pb-10">
-        <div className="text-[28px] font-extralight leading-[45px] tracking-[-1.12px] text-[var(--color-text-inverse)] opacity-80">
+        <div className="text-display tracking-[-1.12px] text-[var(--color-text-inverse)] opacity-80">
           <p>나만의</p>
           <p>플레이리스트 옮기기</p>
         </div>
