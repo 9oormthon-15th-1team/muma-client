@@ -8,7 +8,6 @@ interface SelectScreenProps {
   selectedPlaylists: Set<string>
   selectedSongs: Set<string>
   canProceed: boolean
-  onTogglePlaylist: (seq: string) => void
   onToggleAllPlaylists: () => void
   onToggleSong: (seq: string, songId: string) => void
   onToggleAllSongs: (pl: Playlist) => void
@@ -21,7 +20,6 @@ function PlaylistCard({
   selected,
   expanded,
   selectedSongs,
-  onToggle,
   onExpand,
   onToggleSong,
   onToggleAllSongs,
@@ -30,7 +28,6 @@ function PlaylistCard({
   selected: boolean
   expanded: boolean
   selectedSongs: Set<string>
-  onToggle: () => void
   onExpand: () => void
   onToggleSong: (songId: string) => void
   onToggleAllSongs: () => void
@@ -45,8 +42,8 @@ function PlaylistCard({
     }`}>
       <div className={`flex items-center py-[var(--spacing-4)] ${expanded ? 'border-b border-[var(--color-bg-secondary)]' : ''}`}>
         <div className="flex flex-1 items-center gap-[var(--spacing-8)] py-[var(--spacing-4)]">
-          <button onClick={onToggle} className="cursor-pointer border-none bg-transparent p-0">
-            <CheckCircle checked={selected} />
+          <button onClick={onToggleAllSongs} className="cursor-pointer border-none bg-transparent p-0">
+            <CheckCircle checked={allSongsSelected} />
           </button>
           <div className="flex flex-col gap-[var(--spacing-4)]">
             <span className="text-body-small-bold text-[var(--color-text-inverse)]">{playlist.title}</span>
@@ -57,16 +54,6 @@ function PlaylistCard({
       </div>
       {expanded && (
         <div className="flex flex-col gap-[var(--spacing-8)]">
-          {/* 곡 전체선택 */}
-          <button
-            onClick={onToggleAllSongs}
-            className="flex cursor-pointer items-center gap-[var(--spacing-8)] border-none bg-transparent p-0 text-left"
-          >
-            <CheckCircle checked={allSongsSelected} size={16} />
-            <span className="text-body-small-bold text-[var(--color-brand-primary)]">
-              곡 전체선택
-            </span>
-          </button>
           {playlist.songs.map((song) => (
             <button
               key={song.songId}
@@ -93,7 +80,6 @@ export function SelectScreen({
   selectedPlaylists,
   selectedSongs,
   canProceed,
-  onTogglePlaylist,
   onToggleAllPlaylists,
   onToggleSong,
   onToggleAllSongs,
@@ -140,7 +126,6 @@ export function SelectScreen({
             selected={selectedPlaylists.has(pl.seq)}
             expanded={expandedSeq === pl.seq}
             selectedSongs={selectedSongs}
-            onToggle={() => onTogglePlaylist(pl.seq)}
             onExpand={() => toggleExpand(pl.seq)}
             onToggleSong={(songId) => onToggleSong(pl.seq, songId)}
             onToggleAllSongs={() => onToggleAllSongs(pl)}

@@ -444,6 +444,7 @@ export function App() {
     setExportStatuses({})
   }
 
+  // 레거시 디버그 화면 전용: 플레이리스트 선택/해제 시 해당 곡도 일괄 토글
   function togglePlaylist(seq: string) {
     resetPreviewState()
     const pl = result?.playlists.find((p) => p.seq === seq)
@@ -453,7 +454,6 @@ export function App() {
       else next.add(seq)
       return next
     })
-    // 플레이리스트 선택/해제 시 해당 곡도 일괄 토글
     if (pl) {
       setSelectedSongs((prev) => {
         const next = new Set(prev)
@@ -490,26 +490,47 @@ export function App() {
 
   function toggleSong(playlistSeq: string, songId: string) {
     resetPreviewState()
+    const key = songSelectionKey(playlistSeq, songId)
+    const willSelect = !selectedSongs.has(key)
     setSelectedSongs((prev) => {
-      const key = songSelectionKey(playlistSeq, songId)
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
     })
+    // 곡이 1개라도 선택돼 있으면 플레이리스트를 선택 상태로 동기화한다.
+    const pl = result?.playlists.find((p) => p.seq === playlistSeq)
+    if (pl) {
+      const otherSelected = pl.songs.some(
+        (s) => s.songId !== songId && selectedSongs.has(songSelectionKey(pl.seq, s.songId)),
+      )
+      setSelectedPlaylists((prev) => {
+        const next = new Set(prev)
+        if (willSelect || otherSelected) next.add(pl.seq)
+        else next.delete(pl.seq)
+        return next
+      })
+    }
   }
 
-  // 해당 플레이리스트의 곡 전체 선택/해제 토글
+  // 해당 플레이리스트의 곡 전체 선택/해제 토글 (카드 왼쪽 체크 버튼)
   function toggleAllSongs(pl: Playlist) {
     resetPreviewState()
+    const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
+    const allOn = keys.every((k) => selectedSongs.has(k))
     setSelectedSongs((prev) => {
-      const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
-      const allOn = keys.every((k) => prev.has(k))
       const next = new Set(prev)
       for (const k of keys) {
         if (allOn) next.delete(k)
         else next.add(k)
       }
+      return next
+    })
+    // 전체 선택 → 플레이리스트 포함, 전체 해제 → 제외
+    setSelectedPlaylists((prev) => {
+      const next = new Set(prev)
+      if (allOn) next.delete(pl.seq)
+      else next.add(pl.seq)
       return next
     })
   }
@@ -701,7 +722,6 @@ export function App() {
         selectedPlaylists={selectedPlaylists}
         selectedSongs={selectedSongs}
         canProceed={chosenPlaylists.length > 0}
-        onTogglePlaylist={togglePlaylist}
         onToggleAllPlaylists={toggleAllPlaylists}
         onToggleSong={toggleSong}
         onToggleAllSongs={toggleAllSongs}
