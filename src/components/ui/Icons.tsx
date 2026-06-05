@@ -29,11 +29,12 @@ export function IconArrow({ expanded, onClick }: { expanded: boolean; onClick?: 
 /** Playlist icon (inline SVG) */
 export function IconPlaylist() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17.5 5H2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M17.5 10H2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M12.5 15H2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="16" cy="15" r="2" stroke="white" strokeWidth="1.5" />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M21 15V6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 12H3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 6H3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 18H3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -41,10 +42,9 @@ export function IconPlaylist() {
 /** Song/music note icon (inline SVG) */
 export function IconSong() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M7.5 15.833V4.167L16.667 2.5v11.667" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="5" cy="15.833" r="2.5" stroke="white" strokeWidth="1.5" />
-      <circle cx="14.167" cy="14.167" r="2.5" stroke="white" strokeWidth="1.5" />
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="18" r="4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 18V2l7 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
