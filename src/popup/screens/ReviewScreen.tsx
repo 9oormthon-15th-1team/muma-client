@@ -111,8 +111,12 @@ export function ReviewScreen({
         )
       })}
 
+      <p className="m-0 shrink-0 text-center text-body-small-bold text-[var(--color-brand-primary)]">
+        후보곡을 선택해주세요
+      </p>
+
       <PrimaryButton variant={allReviewed ? 'primary' : 'outline'} disabled={!allReviewed} onClick={handleNext}>
-        {allReviewed ? '다음' : '모든 곡을 확인해주세요'}
+        완료
       </PrimaryButton>
     </ScreenLayout>
   )
