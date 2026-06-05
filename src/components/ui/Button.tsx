@@ -13,7 +13,7 @@ const variantStyles: Record<ButtonVariant, string> = {
   disabled:
     'bg-[var(--color-bg-secondary)] text-[var(--color-text-inverse)]',
   outline:
-    'border border-[var(--color-bg-secondary)] bg-transparent text-[var(--color-bg-secondary)]',
+    'cursor-pointer glass border border-[var(--color-bg-secondary)] bg-[var(--color-glass)] text-[var(--color-text-inverse)]',
 }
 
 export function PrimaryButton({
@@ -28,7 +28,7 @@ export function PrimaryButton({
   return (
     <button
       disabled={disabled}
-      className={`flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center gap-1 rounded-[var(--radius-12)] border-none text-body ${variantStyles[resolved]} ${className}`}
+      className={`flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center gap-1 rounded-[var(--radius-12)] text-body ${variantStyles[resolved]} ${className}`}
       {...props}
     >
       {children}

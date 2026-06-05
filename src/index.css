@@ -57,7 +57,7 @@
   --stroke-1: 1px;
 
   /* ===== Glass (effect/card) — glassmorphism "golden recipe" ===== */
-  --color-glass: rgba(255, 255, 255, 0.07); /* airy translucent fill — define by edge, not fill */
+  --color-glass: rgba(255, 255, 255, 0.04); /* airy translucent fill — define by edge, not fill */
   --glass-blur: 12px;
   --glass-sheen: rgba(255, 255, 255, 0.35); /* bright top highlight */
   --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); /* soft elevation */
