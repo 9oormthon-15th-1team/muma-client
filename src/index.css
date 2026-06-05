@@ -93,3 +93,23 @@
 .text-body-small-bold{ font-size: 12px; line-height: 18px; font-weight: 600; }
 .text-caption        { font-size: 11px; line-height: 16px; font-weight: 400; }
 .text-caption-bold   { font-size: 11px; line-height: 16px; font-weight: 600; }
+
+/* ===== Animations ===== */
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-vinyl-spin {
+  animation: vinyl-spin 4s linear infinite;
+}
+
+/* Music note drifting up-and-away from the record — conveys sound playing. */
+@keyframes note-float {
+  0%   { transform: translate(0, 0) rotate(-6deg); opacity: 0; }
+  15%  { opacity: 1; }
+  70%  { opacity: 0.9; }
+  100% { transform: translate(10px, -26px) rotate(10deg); opacity: 0; }
+}
+.animate-note-float {
+  animation: note-float 1.8s ease-out infinite;
+}

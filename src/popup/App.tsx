@@ -664,7 +664,6 @@ export function App() {
       { label: '플레이리스트 목록', done: !!result },
       { label: '상세곡들', done: !!result && result.playlists.every((pl) => pl.songs.length > 0) },
     ]
-    const playlistCount = result?.playlists.length ?? 0
     const allDone = loadingSteps.every((s) => s.done)
     const progress = loadingSteps.filter((s) => s.done).length / loadingSteps.length * 100
 
@@ -672,7 +671,6 @@ export function App() {
       return (
         <LoadingScreen
           onBack={() => setScreen('guide')}
-          count={playlistCount}
           progress={100}
           statusMessage="완료! 다음 단계로 이동합니다."
           steps={loadingSteps}
@@ -683,7 +681,6 @@ export function App() {
     return (
       <LoadingScreen
         onBack={() => setScreen('guide')}
-        count={playlistCount}
         progress={loading ? Math.max(progress, 15) : progress}
         statusMessage={
           error
