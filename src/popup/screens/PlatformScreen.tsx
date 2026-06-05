@@ -16,7 +16,7 @@ const PLATFORMS = [
 function VinylTurntable() {
   return (
     <div className="relative inline-grid place-items-start">
-      <div className="col-start-1 row-start-1 mt-[10px] inline-grid place-items-start">
+      <div className="animate-vinyl-spin col-start-1 row-start-1 mt-[10px] inline-grid place-items-start">
         <img src="/assets/vinyl-outer.svg" alt="" className="col-start-1 row-start-1 size-[132px]" />
         <img src="/assets/vinyl-ring1.svg" alt="" className="col-start-1 row-start-1 ml-[7px] mt-[7px] size-[118px]" />
         <img src="/assets/vinyl-ring2.svg" alt="" className="col-start-1 row-start-1 ml-[14px] mt-[14px] size-[103px]" />
@@ -26,7 +26,7 @@ function VinylTurntable() {
       <div className="col-start-1 row-start-1 ml-[84px] mt-[22.83px] flex h-[114px] w-[54px] items-center justify-center">
         <img src="/assets/vinyl-arm.svg" alt="" className="h-[113px] w-[20px] rotate-[18deg]" />
       </div>
-      <img src="/assets/vinyl-note.svg" alt="" className="col-start-1 row-start-1 ml-[115px] mt-0 h-[17px] w-[15px]" />
+      <img src="/assets/vinyl-note.svg" alt="" className="animate-note-float col-start-1 row-start-1 ml-[115px] mt-[2px] h-[17px] w-[15px]" />
     </div>
   )
 }
