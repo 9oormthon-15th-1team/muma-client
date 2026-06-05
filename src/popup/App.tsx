@@ -320,6 +320,24 @@ export function App() {
     }
   }, [screen, preview, uploading])
 
+  // 백그라운드 멜론 탭에 콘텐츠 스크립트가 주입될 때까지 재시도하며 추출을 요청한다.
+  // (새 탭은 document_idle 시점에 스크립트가 붙으므로 잠깐 대기가 필요하다.)
+  async function requestExtract(tabId: number): Promise<ExtractAllResponse> {
+    const maxAttempts = 25 // 약 10초
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return (await chrome.tabs.sendMessage(tabId, {
+          type: 'EXTRACT_ALL',
+          memberKey: memberKey ?? undefined,
+        })) as ExtractAllResponse
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!msg.includes('Receiving end does not exist') || attempt >= maxAttempts) throw e
+        await new Promise((r) => setTimeout(r, 400))
+      }
+    }
+  }
+
   async function handleExtract() {
     setLoading(true)
     setError(null)
@@ -330,17 +348,31 @@ export function App() {
     setPreview(null)
     setSelected({})
     setExportStatuses({})
+
+    // 로그인(쿠키)이 없으면 데이터를 가져올 수 없으므로 멜론 로그인 페이지로 보낸다.
+    if (!memberKey) {
+      setLoading(false)
+      setSession({ status: 'LOGGED_OUT' })
+      await chrome.tabs.create({ url: MELON_LOGIN_TARGET, active: true })
+      return
+    }
+
+    // 데이터 추출은 멜론 도메인(content script)에서만 가능하므로, 멜론 플리 페이지를
+    // 백그라운드 탭으로 열어(active:false → 팝업 유지) 추출한 뒤 그 탭을 닫는다.
+    let createdTabId: number | null = null
     try {
-      const tab = await getActiveMelonTab()
-      if (!tab?.id) {
-        setStatus('not_melon')
+      const created = await chrome.tabs.create({
+        url: `${MELON_PLAYLIST_LIST_URL}?memberKey=${memberKey}`,
+        active: false,
+      })
+      createdTabId = created.id ?? null
+      if (createdTabId == null) {
+        setError('멜론 탭을 열 수 없어요. 다시 시도해주세요.')
         setLoading(false)
         return
       }
-      const res = (await chrome.tabs.sendMessage(tab.id, {
-        type: 'EXTRACT_ALL',
-        memberKey: memberKey ?? undefined,
-      })) as ExtractAllResponse
+
+      const res = await requestExtract(createdTabId)
       if (res.ok) {
         setResult(res.result)
         // 기본값: 추출된 플레이리스트 + 곡 전부 선택
@@ -364,13 +396,16 @@ export function App() {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      // 콘텐츠 스크립트가 주입되지 않은 탭(설치 전 열린 페이지 등)에서 발생
       setError(
         msg.includes('Receiving end does not exist')
-          ? '멜론 플레이리스트 페이지를 새로고침한 뒤 다시 시도해주세요.'
+          ? '멜론 페이지를 불러오지 못했어요. 잠시 후 다시 시도해주세요.'
           : msg,
       )
     } finally {
+      // 추출용으로 연 백그라운드 탭은 정리한다.
+      if (createdTabId != null) {
+        void chrome.tabs.remove(createdTabId).catch(() => {})
+      }
       setLoading(false)
     }
   }
