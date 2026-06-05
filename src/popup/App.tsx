@@ -446,22 +446,46 @@ export function App() {
 
   function togglePlaylist(seq: string) {
     resetPreviewState()
+    const pl = result?.playlists.find((p) => p.seq === seq)
     setSelectedPlaylists((prev) => {
       const next = new Set(prev)
       if (next.has(seq)) next.delete(seq)
       else next.add(seq)
       return next
     })
+    // 플레이리스트 선택/해제 시 해당 곡도 일괄 토글
+    if (pl) {
+      setSelectedSongs((prev) => {
+        const next = new Set(prev)
+        const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
+        const adding = !selectedPlaylists.has(seq)
+        for (const k of keys) {
+          if (adding) next.add(k)
+          else next.delete(k)
+        }
+        return next
+      })
+    }
   }
 
   function toggleAllPlaylists() {
     if (!result) return
     resetPreviewState()
-    setSelectedPlaylists((prev) =>
-      prev.size === result.playlists.length
-        ? new Set()
-        : new Set(result.playlists.map((pl) => pl.seq)),
+    const wasAllSelected = selectedPlaylists.size === result.playlists.length
+    setSelectedPlaylists(
+      wasAllSelected ? new Set() : new Set(result.playlists.map((pl) => pl.seq)),
     )
+    // 전체선택/해제 시 곡도 일괄 토글
+    setSelectedSongs(() => {
+      if (wasAllSelected) return new Set()
+      const all = new Set<string>()
+      for (const pl of result.playlists) {
+        for (const s of pl.songs) {
+          all.add(songSelectionKey(pl.seq, s.songId))
+        }
+      }
+      return all
+    })
   }
 
   function toggleSong(playlistSeq: string, songId: string) {
