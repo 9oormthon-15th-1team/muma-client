@@ -60,7 +60,7 @@ export function MatchingScreen({ onBack, playlistCount, totalSongs, matchedCount
       </div>
 
       <div className="flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center">
-        <span className="text-body text-[var(--color-bg-secondary)]">창을 닫지 말고 잠시만 기다려주세요...</span>
+        <span className="animate-blink loading-dots text-body text-[var(--color-bg-secondary)]">창을 닫지 말고 잠시만 기다려주세요</span>
       </div>
     </ScreenLayout>
   )

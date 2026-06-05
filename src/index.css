@@ -113,3 +113,25 @@
 .animate-note-float {
   animation: note-float 1.8s ease-out infinite;
 }
+
+/* "기다려주세요" 안내문: 은은하게 깜빡이며 뒤따르는 점이 1개씩 늘어난다. */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-blink {
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+.loading-dots::after {
+  content: '.';
+  display: inline-block;
+  width: 1.5ch;
+  text-align: left;
+  animation: loading-dots 1.4s infinite;
+}
+@keyframes loading-dots {
+  0%   { content: '.'; }
+  33%  { content: '..'; }
+  66%  { content: '...'; }
+}

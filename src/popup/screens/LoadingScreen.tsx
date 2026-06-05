@@ -93,7 +93,7 @@ export function LoadingScreen({ onBack, progress, statusMessage, steps }: Loadin
       </div>
 
       <div className="flex h-[var(--size-button-height)] w-full shrink-0 items-center justify-center">
-        <span className="text-body text-[var(--color-bg-secondary)]">잠시만 기다려주세요...</span>
+        <span className="animate-blink loading-dots text-body text-[var(--color-bg-secondary)]">잠시만 기다려주세요</span>
       </div>
     </ScreenLayout>
   )
