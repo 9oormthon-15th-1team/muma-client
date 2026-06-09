@@ -33,13 +33,13 @@ pnpm build
 
 ## 5. Extension ID 확인
 
-로드 후 extension ID가 아래와 동일한지 확인:
+`pnpm dev`로 로컬 개발 서버를 사용할 때 extension ID가 아래와 동일한지 확인:
 
 ```
 igloofanfognbpellhefnbbaemkpnema
 ```
 
-> manifest에 공개키가 고정되어 있어 모든 개발 환경에서 동일한 ID가 생성됩니다.
+> Chrome Web Store 업로드용 `pnpm build`/`pnpm zip` 산출물에는 manifest `key`가 포함되지 않습니다. 스토어 배포 ID는 Chrome Web Store에서 부여됩니다.
 
 ## 6. 테스트
 
