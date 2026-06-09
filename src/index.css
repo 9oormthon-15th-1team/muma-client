@@ -103,6 +103,19 @@
   animation: vinyl-spin 4s linear infinite;
 }
 
+/* LP 주황 하이라이트 호: 바깥→안 링마다 회전 방향이 교차한다 (CW, CCW, CW, CCW).
+   transform-box: view-box로 회전 중심을 디스크 중심(viewBox 66,66)에 고정. */
+@keyframes vinyl-spin-ccw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+.vinyl-arc {
+  transform-box: view-box;
+  transform-origin: center;
+}
+.vinyl-arc-cw  { animation: vinyl-spin 4s linear infinite; }
+.vinyl-arc-ccw { animation: vinyl-spin-ccw 4s linear infinite; }
+
 /* Music note drifting up-and-away from the record — conveys sound playing. */
 @keyframes note-float {
   0%   { transform: translate(0, 0) rotate(-6deg); opacity: 0; }
