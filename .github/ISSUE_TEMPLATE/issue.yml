@@ -1,0 +1,55 @@
+name: Issue
+description: 버그, 기능 제안, 작업 요청을 등록합니다.
+title: "[Issue] "
+labels: []
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: 유형
+      description: 이 이슈의 성격을 선택해 주세요.
+      options:
+        - 버그
+        - 기능 제안
+        - 작업 요청
+        - 문서
+        - 기타
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 요약
+      description: 무엇을 다뤄야 하는지 간단히 적어 주세요.
+      placeholder: 예) Spotify 플레이리스트 불러오기 실패 시 안내 문구가 표시되지 않습니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 배경 / 재현 방법
+      description: 버그라면 재현 순서를, 제안이라면 필요한 배경을 적어 주세요.
+      placeholder: |
+        1. 팝업을 엽니다.
+        2. Spotify 연결을 시도합니다.
+        3. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+      description: 어떤 결과가 나오면 완료로 볼 수 있는지 적어 주세요.
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 참고 자료
+      description: 스크린샷, 로그, 관련 링크가 있으면 첨부해 주세요.
+    validations:
+      required: false
