@@ -34,17 +34,21 @@ interface PlatformCardProps {
   icon: string
   label: string
   selected: boolean
+  disabled?: boolean
   onClick: () => void
 }
 
-export function PlatformCard({ icon, label, selected, onClick }: PlatformCardProps) {
+export function PlatformCard({ icon, label, selected, disabled, onClick }: PlatformCardProps) {
   return (
     <button
+      disabled={disabled}
       onClick={onClick}
-      className={`glass flex flex-1 cursor-pointer flex-col items-center justify-center gap-[var(--spacing-4)] rounded-[var(--radius-12)] border p-[var(--spacing-16)] ${
-        selected
-          ? 'border-[var(--color-brand-primary)] bg-[var(--color-bg-secondary)]'
-          : 'border-[var(--color-action-disabled)] bg-[var(--color-glass)]'
+      className={`glass flex flex-1 flex-col items-center justify-center gap-[var(--spacing-4)] rounded-[var(--radius-12)] border p-[var(--spacing-16)] ${
+        disabled
+          ? 'cursor-not-allowed border-[var(--color-action-disabled)] bg-[var(--color-glass)] opacity-40'
+          : selected
+            ? 'cursor-pointer border-[var(--color-brand-primary)] bg-[var(--color-bg-secondary)]'
+            : 'cursor-pointer border-[var(--color-action-disabled)] bg-[var(--color-glass)]'
       }`}
     >
       <img src={icon} alt="" className="size-6" />

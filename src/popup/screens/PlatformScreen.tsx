@@ -9,8 +9,8 @@ interface PlatformScreenProps {
 }
 
 const PLATFORMS = [
-  { id: 'spotify' as const, label: 'Spotify', icon: '/assets/icon-spotify.svg' },
-  { id: 'ytmusic' as const, label: 'Youtube music', icon: '/assets/icon-ytmusic.svg' },
+  { id: 'spotify' as const, label: 'Spotify', icon: '/assets/icon-spotify.svg', disabled: false },
+  { id: 'ytmusic' as const, label: 'Youtube music', icon: '/assets/icon-ytmusic.svg', disabled: true },
 ]
 
 function VinylTurntable() {
@@ -42,7 +42,7 @@ export function PlatformScreen({ onBack, onNext }: PlatformScreenProps) {
         <VinylTurntable />
         <div className="flex w-full gap-[var(--spacing-16)]">
           {PLATFORMS.map((p) => (
-            <PlatformCard key={p.id} icon={p.icon} label={p.label} selected={selected === p.id} onClick={() => setSelected(p.id)} />
+            <PlatformCard key={p.id} icon={p.icon} label={p.label} selected={selected === p.id} disabled={p.disabled} onClick={() => setSelected(p.id)} />
           ))}
         </div>
       </div>

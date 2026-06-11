@@ -1,4 +1,5 @@
 import { defineManifest } from '@crxjs/vite-plugin'
+import { loadEnv } from 'vite'
 import pkg from './package.json'
 
 const DEVELOPMENT_EXTENSION_KEY =
@@ -7,49 +8,63 @@ const DEVELOPMENT_EXTENSION_KEY =
 // Manifest V3 정의. CRXJS의 defineManifest로 타입 안전하게 작성합니다.
 // 엔트리포인트 경로는 src/ 기준 실제 파일을 가리키며, CRXJS가 빌드 시
 // 해시된 산출물 경로로 자동 치환해줍니다.
-export default defineManifest((env) => ({
-  manifest_version: 3,
-  // Chrome Web Store 업로드용 빌드에는 key를 포함할 수 없다.
-  ...(env.command === 'serve' ? { key: DEVELOPMENT_EXTENSION_KEY } : {}),
-  name: 'Muma Client',
-  version: pkg.version,
-  description: pkg.description,
+export default defineManifest((env) => {
+  // API 주소는 .env(VITE_API_BASE_URL) 한 곳에서만 관리한다 — 번들(api/client.ts)과
+  // host_permissions이 항상 같은 주소를 바라보도록 manifest에 하드코딩하지 않는다.
+  const apiBaseUrl = loadEnv(env.mode, '.').VITE_API_BASE_URL
+  if (!apiBaseUrl) {
+    throw new Error('VITE_API_BASE_URL이 설정되지 않았습니다 (.env 확인)')
+  }
+  if (env.command === 'build' && !apiBaseUrl.startsWith('https://')) {
+    console.warn(
+      `[manifest] VITE_API_BASE_URL(${apiBaseUrl})이 https가 아닙니다 — 스토어 배포 빌드라면 프로덕션 HTTPS 주소로 변경하세요.`,
+    )
+  }
 
-  // 팝업: 툴바 아이콘 클릭 시 뜨는 UI
-  action: {
-    default_popup: 'src/popup/index.html',
-    default_icon: {
+  return {
+    manifest_version: 3,
+    // Chrome Web Store 업로드용 빌드에는 key를 포함할 수 없다.
+    ...(env.command === 'serve' ? { key: DEVELOPMENT_EXTENSION_KEY } : {}),
+    name: 'Muma Client',
+    version: pkg.version,
+    description: pkg.description,
+
+    // 팝업: 툴바 아이콘 클릭 시 뜨는 UI
+    action: {
+      default_popup: 'src/popup/index.html',
+      default_icon: {
+        16: 'icons/icon16.png',
+        48: 'icons/icon48.png',
+        128: 'icons/icon128.png',
+      },
+    },
+
+    // 옵션 페이지: 확장 프로그램 설정 화면
+    options_page: 'src/options/index.html',
+
+    // 백그라운드 서비스 워커 (MV3)
+    background: {
+      service_worker: 'src/background/index.ts',
+      type: 'module',
+    },
+
+    // 콘텐츠 스크립트: 매칭되는 웹페이지에 주입
+    content_scripts: [
+      {
+        matches: ['*://*.melon.com/*'],
+        js: ['src/content/index.tsx'],
+        run_at: 'document_idle',
+      },
+    ],
+
+    icons: {
       16: 'icons/icon16.png',
       48: 'icons/icon48.png',
       128: 'icons/icon128.png',
     },
-  },
 
-  // 옵션 페이지: 확장 프로그램 설정 화면
-  options_page: 'src/options/index.html',
-
-  // 백그라운드 서비스 워커 (MV3)
-  background: {
-    service_worker: 'src/background/index.ts',
-    type: 'module',
-  },
-
-  // 콘텐츠 스크립트: 매칭되는 웹페이지에 주입
-  content_scripts: [
-    {
-      matches: ['*://*.melon.com/*'],
-      js: ['src/content/index.tsx'],
-      run_at: 'document_idle',
-    },
-  ],
-
-  icons: {
-    16: 'icons/icon16.png',
-    48: 'icons/icon48.png',
-    128: 'icons/icon128.png',
-  },
-
-  // cookies: 팝업에서 멜론 MLCP 쿠키를 읽어 로그인/ memberKey를 페이지 무관하게 확인
-  permissions: ['storage', 'activeTab', 'cookies', 'identity'],
-  host_permissions: ['http://192.168.0.22:8080/*', 'https://*.melon.com/*', 'https://accounts.spotify.com/*'],
-}))
+    // cookies: 팝업에서 멜론 MLCP 쿠키를 읽어 로그인/ memberKey를 페이지 무관하게 확인
+    permissions: ['storage', 'activeTab', 'cookies', 'identity'],
+    host_permissions: [`${new URL(apiBaseUrl).origin}/*`, 'https://*.melon.com/*', 'https://accounts.spotify.com/*'],
+  }
+})
