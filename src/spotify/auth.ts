@@ -90,7 +90,6 @@ export async function login(): Promise<TokenData> {
     url: authUrl,
     interactive: true,
   })
-  console.log('[spotify-auth] redirect result:', redirectUrl)
 
   if (!redirectUrl) {
     throw new Error('OAuth flow was cancelled')
