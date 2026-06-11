@@ -80,10 +80,6 @@ export interface SpotifyLoginRequest {
   type: 'SPOTIFY_LOGIN'
 }
 
-export interface SpotifyGetTokenRequest {
-  type: 'SPOTIFY_GET_TOKEN'
-}
-
 export interface SpotifyStatusRequest {
   type: 'SPOTIFY_STATUS'
 }
@@ -96,7 +92,6 @@ export type BackgroundRequest =
   | PingRequest
   | ExportToSpotifyRequest
   | SpotifyLoginRequest
-  | SpotifyGetTokenRequest
   | SpotifyStatusRequest
   | SpotifyLogoutRequest
 
@@ -106,7 +101,7 @@ export interface PongResponse {
   at: number
 }
 
-/** SPOTIFY_LOGIN · SPOTIFY_GET_TOKEN 공용 응답 */
+/** SPOTIFY_LOGIN 응답 */
 export type SpotifyTokenResponse =
   | { success: true; accessToken: string }
   | { success: false; error?: string }
