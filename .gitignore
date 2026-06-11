@@ -9,3 +9,4 @@ dist
 .claude
 /docs
 swagger.json
+skills-lock.json
