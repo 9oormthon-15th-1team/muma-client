@@ -65,11 +65,16 @@ async function requestExtract(tabId: number, memberKey: string): Promise<Extract
 }
 
 export async function extractFromMelon(memberKey: string): Promise<MelonExtractionOutcome> {
-  const created = await chrome.tabs.create({
-    url: `${MELON_PLAYLIST_LIST_URL}?memberKey=${memberKey}`,
-    active: false,
-  })
-  const tabId = created.id
+  let tabId: number | undefined
+  try {
+    const created = await chrome.tabs.create({
+      url: `${MELON_PLAYLIST_LIST_URL}?memberKey=${memberKey}`,
+      active: false,
+    })
+    tabId = created.id
+  } catch (e) {
+    return { ok: false, code: 'TAB_OPEN_FAILED', message: e instanceof Error ? e.message : String(e) }
+  }
   if (tabId == null) {
     return { ok: false, code: 'TAB_OPEN_FAILED' }
   }

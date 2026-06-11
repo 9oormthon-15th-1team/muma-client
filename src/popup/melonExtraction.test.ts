@@ -101,6 +101,16 @@ describe('extractFromMelon', () => {
     expect(tabsSendMessage).not.toHaveBeenCalled()
     expect(tabsRemove).not.toHaveBeenCalled()
   })
+
+  it('탭 생성 호출이 거부돼도 throw하지 않고 TAB_OPEN_FAILED를 돌려준다', async () => {
+    tabsCreate.mockRejectedValue(new Error('No current window'))
+
+    const outcome = await extractFromMelon('12345')
+
+    expect(outcome).toEqual({ ok: false, code: 'TAB_OPEN_FAILED', message: 'No current window' })
+    expect(tabsSendMessage).not.toHaveBeenCalled()
+    expect(tabsRemove).not.toHaveBeenCalled()
+  })
 })
 
 describe('멜론 탭 열기', () => {
