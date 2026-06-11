@@ -13,10 +13,12 @@ pnpm install
 
 ```
 VITE_SPOTIFY_CLIENT_ID=a5aa23ee3d8b4b8b8ef2487495386ece
-VITE_API_BASE_URL=http://192.168.0.22:8080
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
 > `.env`는 gitignore에 포함되어 있으므로 반드시 로컬에서 직접 생성해야 합니다.
+> 공용 개발 서버를 쓰는 경우 `VITE_API_BASE_URL`은 팀 내부 채널에서 공유된 주소로 바꿔주세요 (공개 레포에는 내부 주소를 적지 않습니다).
+> `VITE_API_BASE_URL`은 번들과 manifest `host_permissions`에 함께 반영되므로, 스토어 배포 빌드 시 프로덕션 HTTPS 주소로 설정해야 합니다.
 
 ## 3. 빌드
 
