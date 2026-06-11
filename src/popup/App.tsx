@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useState } from 'react'
 import type {
   CheckMelonSessionResponse,
-  ExtractAllResponse,
   MelonSessionResult,
   Playlist,
   SpotifyTrack,
@@ -25,6 +24,7 @@ import {
   spotifyLogin,
   spotifyLogout,
 } from './backgroundMessages'
+import { extractFromMelon, openMelonLogin, openMyMusicPlaylists } from './melonExtraction'
 import { MainScreen } from './screens/MainScreen'
 import { GuideScreen } from './screens/GuideScreen'
 import { LoadingScreen } from './screens/LoadingScreen'
@@ -33,8 +33,6 @@ import { PlatformScreen } from './screens/PlatformScreen'
 import { MatchingScreen } from './screens/MatchingScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { CompleteScreen } from './screens/CompleteScreen'
-
-const MELON_PLAYLIST_LIST_URL = 'https://www.melon.com/mymusic/playlist/mymusicplaylist_list.htm'
 
 // 멜론 로그인 사용자의 memberKey를 쿠키에서 읽는다(팝업 전용, 페이지 무관).
 // 멜론은 memberKey를 `keyCookie` 쿠키에 평문 숫자로 저장한다(우선). 없으면 MLCP(base64) 폴백.
@@ -50,12 +48,6 @@ async function readMelonMemberKey(): Promise<string | null> {
     return null
   }
 }
-
-// 멜론 실제 로그인 페이지(accounts.melon.com). 로그인 후 플레이리스트 목록으로 복귀시켜
-// 콘텐츠 스크립트가 해당 탭에서 동작하도록 한다.
-const MELON_LOGIN_TARGET =
-  'https://accounts.melon.com/login/login.htm?redirectURL=' +
-  encodeURIComponent('https://www.melon.com/mymusic/playlist/mymusicplaylist_list.htm')
 
 type PopupStatus = 'checking' | 'not_melon' | 'content_not_ready' | 'ready' | 'error'
 
@@ -342,24 +334,6 @@ export function App() {
     }
   }, [screen, preview, uploading])
 
-  // 백그라운드 멜론 탭에 콘텐츠 스크립트가 주입될 때까지 재시도하며 추출을 요청한다.
-  // (새 탭은 document_idle 시점에 스크립트가 붙으므로 잠깐 대기가 필요하다.)
-  async function requestExtract(tabId: number): Promise<ExtractAllResponse> {
-    const maxAttempts = 25 // 약 10초
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return (await chrome.tabs.sendMessage(tabId, {
-          type: 'EXTRACT_ALL',
-          memberKey: memberKey ?? undefined,
-        })) as ExtractAllResponse
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        if (!msg.includes('Receiving end does not exist') || attempt >= maxAttempts) throw e
-        await new Promise((r) => setTimeout(r, 400))
-      }
-    }
-  }
-
   async function handleExtract() {
     dispatch({ type: 'EXTRACT_STARTED' })
 
@@ -367,63 +341,46 @@ export function App() {
     if (!memberKey) {
       dispatch({ type: 'EXTRACT_ABORTED' })
       setSession({ status: 'LOGGED_OUT' })
-      await chrome.tabs.create({ url: MELON_LOGIN_TARGET, active: true })
+      await openMelonLogin(true)
       return
     }
 
-    // 데이터 추출은 멜론 도메인(content script)에서만 가능하므로, 멜론 플리 페이지를
-    // 백그라운드 탭으로 열어(active:false → 팝업 유지) 추출한 뒤 그 탭을 닫는다.
-    let createdTabId: number | null = null
-    try {
-      const created = await chrome.tabs.create({
-        url: `${MELON_PLAYLIST_LIST_URL}?memberKey=${memberKey}`,
-        active: false,
-      })
-      createdTabId = created.id ?? null
-      if (createdTabId == null) {
-        dispatch({ type: 'EXTRACT_FAILED', error: '멜론 탭을 열 수 없어요. 다시 시도해주세요.' })
-        return
-      }
+    const outcome = await extractFromMelon(memberKey)
+    if (outcome.ok) {
+      dispatch({ type: 'EXTRACT_SUCCEEDED', result: outcome.result })
+      setSession({ status: 'LOGGED_IN', playlistCount: outcome.result.playlists.length })
+      return
+    }
 
-      const res = await requestExtract(createdTabId)
-      if (res.ok) {
-        dispatch({ type: 'EXTRACT_SUCCEEDED', result: res.result })
-        setSession({ status: 'LOGGED_IN', playlistCount: res.result.playlists.length })
-      } else if (res.error === 'NOT_LOGGED_IN') {
+    // 선언된 추출 에러 코드 → 사용자 안내 문구·세션 상태 매핑
+    switch (outcome.code) {
+      case 'NOT_LOGGED_IN':
         dispatch({ type: 'EXTRACT_FAILED', error: '멜론에 로그인 후 다시 시도해주세요.' })
         setSession({ status: 'LOGGED_OUT' })
-      } else if (res.error === 'PLAYLIST_IDS_NOT_FOUND' || res.error === 'PLAYLIST_LIST_EMPTY') {
+        break
+      case 'PLAYLIST_NOT_FOUND':
         dispatch({
           type: 'EXTRACT_FAILED',
           error: '플레이리스트를 찾지 못했습니다. 멜론에 로그인한 계정인지 확인해주세요.',
         })
         setSession({ status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 })
-      } else {
-        dispatch({ type: 'EXTRACT_FAILED', error: `추출 실패: ${res.error}` })
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      dispatch({
-        type: 'EXTRACT_FAILED',
-        error: msg.includes('Receiving end does not exist')
-          ? '멜론 페이지를 불러오지 못했어요. 잠시 후 다시 시도해주세요.'
-          : msg,
-      })
-    } finally {
-      // 추출용으로 연 백그라운드 탭은 정리한다.
-      if (createdTabId != null) {
-        void chrome.tabs.remove(createdTabId).catch(() => {})
-      }
+        break
+      case 'TAB_OPEN_FAILED':
+        dispatch({ type: 'EXTRACT_FAILED', error: '멜론 탭을 열 수 없어요. 다시 시도해주세요.' })
+        break
+      case 'PAGE_LOAD_FAILED':
+        dispatch({
+          type: 'EXTRACT_FAILED',
+          error: '멜론 페이지를 불러오지 못했어요. 잠시 후 다시 시도해주세요.',
+        })
+        break
+      case 'CONTENT_ERROR':
+        dispatch({ type: 'EXTRACT_FAILED', error: `추출 실패: ${outcome.message}` })
+        break
+      case 'UNKNOWN':
+        dispatch({ type: 'EXTRACT_FAILED', error: outcome.message ?? '알 수 없는 오류' })
+        break
     }
-  }
-
-  async function openMelonLogin() {
-    await chrome.tabs.create({ url: MELON_LOGIN_TARGET })
-  }
-
-  async function openMyMusic() {
-    const url = memberKey ? `${MELON_PLAYLIST_LIST_URL}?memberKey=${memberKey}` : MELON_PLAYLIST_LIST_URL
-    await chrome.tabs.create({ url })
   }
 
   async function handleUpload() {
@@ -776,7 +733,7 @@ export function App() {
       {status === 'not_melon' && (
         <div>
           <p>멜론 페이지에서 실행해주세요.</p>
-          <button onClick={openMelonLogin} className={btn}>멜론 열기</button>
+          <button onClick={() => void openMelonLogin()} className={btn}>멜론 열기</button>
         </div>
       )}
 
@@ -790,7 +747,7 @@ export function App() {
       {status === 'ready' && session?.status === 'LOGGED_OUT' && (
         <div>
           <p>멜론 로그인이 필요합니다.</p>
-          <button onClick={openMelonLogin} className={btn}>멜론 로그인하기</button>
+          <button onClick={() => void openMelonLogin()} className={btn}>멜론 로그인하기</button>
           <button onClick={checkSession} className={`${btn} ml-2`}>
             다시 확인
           </button>
@@ -800,7 +757,7 @@ export function App() {
       {status === 'ready' && session?.status === 'PLAYLIST_IDS_NOT_FOUND' && (
         <div>
           <p>로그인됨 — 플레이리스트를 불러오지 못했습니다. 내 플레이리스트 페이지에서 다시 시도해주세요.</p>
-          <button onClick={openMyMusic} className={btn}>내 플레이리스트 열기</button>
+          <button onClick={() => void openMyMusicPlaylists(memberKey)} className={btn}>내 플레이리스트 열기</button>
           <button onClick={checkSession} className={`${btn} ml-2`}>
             다시 확인
           </button>
