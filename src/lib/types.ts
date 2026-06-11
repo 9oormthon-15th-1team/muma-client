@@ -71,6 +71,54 @@ export type ExportToSpotifyResponse =
   | { ok: true }
   | { ok: false; error: string }
 
+/** 팝업 → 백그라운드. 응답 스키마는 아래 *Response 타입이 단일 출처다. */
+export interface PingRequest {
+  type: 'PING'
+}
+
+export interface SpotifyLoginRequest {
+  type: 'SPOTIFY_LOGIN'
+}
+
+export interface SpotifyGetTokenRequest {
+  type: 'SPOTIFY_GET_TOKEN'
+}
+
+export interface SpotifyStatusRequest {
+  type: 'SPOTIFY_STATUS'
+}
+
+export interface SpotifyLogoutRequest {
+  type: 'SPOTIFY_LOGOUT'
+}
+
+export type BackgroundRequest =
+  | PingRequest
+  | ExportToSpotifyRequest
+  | SpotifyLoginRequest
+  | SpotifyGetTokenRequest
+  | SpotifyStatusRequest
+  | SpotifyLogoutRequest
+
+/** 백그라운드 → 팝업 */
+export interface PongResponse {
+  type: 'PONG'
+  at: number
+}
+
+/** SPOTIFY_LOGIN · SPOTIFY_GET_TOKEN 공용 응답 */
+export type SpotifyTokenResponse =
+  | { success: true; accessToken: string }
+  | { success: false; error?: string }
+
+export interface SpotifyStatusResponse {
+  loggedIn: boolean
+}
+
+export type SpotifyLogoutResponse =
+  | { success: true }
+  | { success: false; error?: string }
+
 export type MelonSessionStatus =
   | 'LOGGED_IN'
   | 'LOGGED_OUT'

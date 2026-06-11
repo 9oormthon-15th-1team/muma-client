@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useState } from 'react'
 import type {
   CheckMelonSessionResponse,
-  ExportToSpotifyResponse,
   ExtractAllResponse,
   MelonSessionResult,
   Playlist,
@@ -20,6 +19,12 @@ import {
 import { memberKeyFromMlcp } from '../lib/melonClient'
 import { loadSession, saveSession } from './sessionState'
 import { initialMigrationState, migrationReducer } from './migration'
+import {
+  getSpotifyStatus,
+  requestSpotifyExport,
+  spotifyLogin,
+  spotifyLogout,
+} from './backgroundMessages'
 import { MainScreen } from './screens/MainScreen'
 import { GuideScreen } from './screens/GuideScreen'
 import { LoadingScreen } from './screens/LoadingScreen'
@@ -313,9 +318,12 @@ export function App() {
 
   useEffect(() => {
     void checkSession()
-    chrome.runtime.sendMessage({ type: 'SPOTIFY_STATUS' }, (res) => {
-      if (res?.loggedIn) setSpotifyLoggedIn(true)
-    })
+    void getSpotifyStatus()
+      .then((res) => {
+        if (res.loggedIn) setSpotifyLoggedIn(true)
+      })
+      // 백그라운드 미응답 시 비로그인으로 간주 (best-effort 조회)
+      .catch(() => {})
   }, [])
 
   // 로딩 완료 시 선택 화면으로 자동 전환 (전환 조건 판정은 리듀서가 한다)
@@ -499,10 +507,7 @@ export function App() {
       await Promise.all(
         jobs.map(async (job) => {
           try {
-            const res = (await chrome.runtime.sendMessage({
-              type: 'EXPORT_TO_SPOTIFY',
-              payload: job.payload,
-            })) as ExportToSpotifyResponse
+            const res = await requestSpotifyExport(job.payload)
 
             if (res.ok) {
               dispatch({
@@ -530,24 +535,27 @@ export function App() {
   const handleSpotifyLogin = () => {
     setSpotifyLoading(true)
     setSpotifyError(null)
-    chrome.runtime.sendMessage({ type: 'SPOTIFY_LOGIN' }, (res) => {
-      console.log('[popup] SPOTIFY_LOGIN response:', res)
-      setSpotifyLoading(false)
-      if (res?.success) {
-        setSpotifyLoggedIn(true)
-      } else {
-        setSpotifyError(res?.error ?? 'Login failed')
-      }
-    })
+    spotifyLogin()
+      .then((res) => {
+        if (res.success) {
+          setSpotifyLoggedIn(true)
+        } else {
+          setSpotifyError(res.error ?? 'Login failed')
+        }
+      })
+      .catch((e: unknown) => setSpotifyError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setSpotifyLoading(false))
   }
 
   const handleSpotifyLogout = () => {
-    chrome.runtime.sendMessage({ type: 'SPOTIFY_LOGOUT' }, (res) => {
-      if (res?.success) {
-        setSpotifyLoggedIn(false)
-        setSpotifyError(null)
-      }
-    })
+    void spotifyLogout()
+      .then((res) => {
+        if (res.success) {
+          setSpotifyLoggedIn(false)
+          setSpotifyError(null)
+        }
+      })
+      .catch(() => {})
   }
 
   const btn =
@@ -661,16 +669,20 @@ export function App() {
             } else {
               // OAuth 로그인 트리거 → 성공 시 매칭 진행
               setSpotifyLoading(true)
-              chrome.runtime.sendMessage({ type: 'SPOTIFY_LOGIN' }, (res) => {
-                setSpotifyLoading(false)
-                if (res?.success) {
-                  setSpotifyLoggedIn(true)
-                  dispatch({ type: 'PLATFORM_CONFIRMED' })
-                  void handleUpload()
-                } else {
-                  setSpotifyError(res?.error ?? 'Login failed')
-                }
-              })
+              spotifyLogin()
+                .then((res) => {
+                  if (res.success) {
+                    setSpotifyLoggedIn(true)
+                    dispatch({ type: 'PLATFORM_CONFIRMED' })
+                    void handleUpload()
+                  } else {
+                    setSpotifyError(res.error ?? 'Login failed')
+                  }
+                })
+                .catch((e: unknown) =>
+                  setSpotifyError(e instanceof Error ? e.message : String(e)),
+                )
+                .finally(() => setSpotifyLoading(false))
             }
           }
         }}

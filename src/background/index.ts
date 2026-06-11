@@ -1,21 +1,30 @@
 import { exportToSpotify } from '../lib/melonUpload'
-import type { ExportToSpotifyRequest, ExportToSpotifyResponse } from '../lib/types'
+import type {
+  BackgroundRequest,
+  ExportToSpotifyResponse,
+  PongResponse,
+  SpotifyLogoutResponse,
+  SpotifyStatusResponse,
+  SpotifyTokenResponse,
+} from '../lib/types'
 import { login, getStoredTokens, clearTokens, getValidAccessToken } from '../spotify/auth'
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('[muma] 설치/업데이트:', details.reason)
 })
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+// 요청/응답 와이어 포맷은 lib/types.ts의 BackgroundRequest·*Response 선언이 단일 출처다.
+chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendResponse) => {
   console.log('[background] message received:', message)
 
   if (message?.type === 'PING') {
-    sendResponse({ type: 'PONG', at: Date.now() })
+    const response: PongResponse = { type: 'PONG', at: Date.now() }
+    sendResponse(response)
     return true
   }
 
   if (message?.type === 'EXPORT_TO_SPOTIFY') {
-    const { payload } = message as ExportToSpotifyRequest
+    const { payload } = message
     getValidAccessToken()
       .then((token) => exportToSpotify(token, payload))
       .then(() => {
@@ -38,33 +47,53 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     login()
       .then((tokens) => {
         console.log('[background] login success')
-        sendResponse({ success: true, accessToken: tokens.accessToken })
+        const response: SpotifyTokenResponse = { success: true, accessToken: tokens.accessToken }
+        sendResponse(response)
       })
       .catch((err: Error) => {
         console.error('[background] login error:', err)
-        sendResponse({ success: false, error: err.message })
+        const response: SpotifyTokenResponse = { success: false, error: err.message }
+        sendResponse(response)
       })
     return true
   }
 
   if (message?.type === 'SPOTIFY_GET_TOKEN') {
     getValidAccessToken()
-      .then((accessToken) => sendResponse({ success: true, accessToken }))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }))
+      .then((accessToken) => {
+        const response: SpotifyTokenResponse = { success: true, accessToken }
+        sendResponse(response)
+      })
+      .catch((err: Error) => {
+        const response: SpotifyTokenResponse = { success: false, error: err.message }
+        sendResponse(response)
+      })
     return true
   }
 
   if (message?.type === 'SPOTIFY_STATUS') {
     getStoredTokens()
-      .then((tokens) => sendResponse({ loggedIn: tokens !== null }))
-      .catch(() => sendResponse({ loggedIn: false }))
+      .then((tokens) => {
+        const response: SpotifyStatusResponse = { loggedIn: tokens !== null }
+        sendResponse(response)
+      })
+      .catch(() => {
+        const response: SpotifyStatusResponse = { loggedIn: false }
+        sendResponse(response)
+      })
     return true
   }
 
   if (message?.type === 'SPOTIFY_LOGOUT') {
     clearTokens()
-      .then(() => sendResponse({ success: true }))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }))
+      .then(() => {
+        const response: SpotifyLogoutResponse = { success: true }
+        sendResponse(response)
+      })
+      .catch((err: Error) => {
+        const response: SpotifyLogoutResponse = { success: false, error: err.message }
+        sendResponse(response)
+      })
     return true
   }
 
