@@ -1,4 +1,10 @@
-import type { MelonTrackResult, Playlist, SpotifyExportRequest } from './types'
+import type {
+  ExtractResult,
+  MelonTrackRequest,
+  MelonTrackResult,
+  Playlist,
+  SpotifyExportRequest,
+} from './types'
 
 export interface PlaylistPreviewGroup {
   playlist: Playlist
@@ -18,6 +24,37 @@ export type PlaylistExportStatus =
   | { status: 'skipped'; reason: string }
 
 export type PlaylistExportStatusMap = Record<string, PlaylistExportStatus>
+
+function parseLikes(value: string | undefined): number {
+  const parsed = Number((value ?? '').replace(/,/g, '').trim())
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeArtistsText(value: string): string {
+  return value
+    .split(/[;,]/)
+    .map((artist) => artist.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
+// 추출 결과를 서버 매칭(preview) 요청 행으로 평탄화한다.
+export function mapExtractResultToMelonTracks(result: ExtractResult): MelonTrackRequest[] {
+  return result.playlists.flatMap((playlist) =>
+    playlist.songs.map((song) => ({
+      playlist_id: playlist.seq,
+      position: song.trackNo,
+      melon_song_id: song.songId,
+      title: song.title,
+      artists_text: normalizeArtistsText(song.artist),
+      melon_artist_ids: song.artistIds ?? '',
+      album_title: song.album,
+      melon_album_id: song.albumId ?? '',
+      melon_likes: parseLikes(song.likes),
+      melon_song_url: song.songUrl ?? `https://www.melon.com/song/detail.htm?songId=${song.songId}`,
+    })),
+  )
+}
 
 export function spotifySelectionKey(playlistId: string, melonSongId: string): string {
   return `${playlistId}:${melonSongId}`

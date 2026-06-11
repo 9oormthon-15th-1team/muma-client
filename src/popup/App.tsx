@@ -5,11 +5,12 @@ import type {
   Playlist,
   SpotifyTrack,
 } from '../lib/types'
-import { mapExtractResultToMelonTracks, uploadMelonTracks } from '../lib/melonUpload'
+import { previewMelonTracks } from '../api/client'
 import {
   buildExportTrackIds,
   buildPlaylistExportJobs,
   groupPreviewByPlaylist,
+  mapExtractResultToMelonTracks,
   songSelectionKey,
   spotifySelectionKey,
   type PlaylistExportStatusMap,
@@ -392,7 +393,7 @@ export function App() {
       const chosen = chosenPlaylists
       const settled = await Promise.allSettled(
         chosen.map((pl) =>
-          uploadMelonTracks(
+          previewMelonTracks(
             mapExtractResultToMelonTracks({
               playlists: [pl],
               extractedAt: result.extractedAt,

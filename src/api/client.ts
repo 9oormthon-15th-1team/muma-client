@@ -4,7 +4,7 @@ import type {
   SpotifyExportRequest,
 } from '../lib/types'
 
-export interface ApiResponse<T = void> {
+interface ApiResponse<T = void> {
   meta: { code: string; message?: string }
   data?: T
 }
@@ -87,15 +87,21 @@ async function request<T>(
   }
 }
 
-export function previewMelonTracks(tracks: MelonTrackRequest[]) {
-  return request<MelonTrackResult[]>('/api/melon/preview', {
+export async function previewMelonTracks(
+  tracks: MelonTrackRequest[],
+): Promise<MelonTrackResult[]> {
+  const response = await request<MelonTrackResult[]>('/api/melon/preview', {
     method: 'POST',
     body: JSON.stringify(tracks),
   })
+  return response.data ?? []
 }
 
-export function exportToSpotify(spotifyToken: string, data: SpotifyExportRequest) {
-  return request('/api/spotify/export', {
+export async function exportToSpotify(
+  spotifyToken: string,
+  data: SpotifyExportRequest,
+): Promise<void> {
+  await request('/api/spotify/export', {
     method: 'POST',
     spotifyToken,
     body: JSON.stringify(data),

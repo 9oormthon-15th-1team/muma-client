@@ -1,4 +1,4 @@
-import { exportToSpotify } from '../lib/melonUpload'
+import { exportToSpotify } from '../api/client'
 import type {
   BackgroundRequest,
   ExportToSpotifyResponse,
