@@ -58,19 +58,6 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
     return true
   }
 
-  if (message?.type === 'SPOTIFY_GET_TOKEN') {
-    getValidAccessToken()
-      .then((accessToken) => {
-        const response: SpotifyTokenResponse = { success: true, accessToken }
-        sendResponse(response)
-      })
-      .catch((err: Error) => {
-        const response: SpotifyTokenResponse = { success: false, error: err.message }
-        sendResponse(response)
-      })
-    return true
-  }
-
   if (message?.type === 'SPOTIFY_STATUS') {
     getStoredTokens()
       .then((tokens) => {
