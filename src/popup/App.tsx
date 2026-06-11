@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import type {
   CheckMelonSessionResponse,
   ExportToSpotifyResponse,
   ExtractAllResponse,
-  ExtractResult,
   MelonSessionResult,
-  MelonTrackResult,
   Playlist,
   SpotifyTrack,
 } from '../lib/types'
@@ -20,7 +18,8 @@ import {
   type PlaylistPreviewGroup,
 } from '../lib/playlistPreview'
 import { memberKeyFromMlcp } from '../lib/melonClient'
-import { loadSession, resolveRestoredScreen, saveSession, type Screen } from './sessionState'
+import { loadSession, saveSession } from './sessionState'
+import { initialMigrationState, migrationReducer } from './migration'
 import { MainScreen } from './screens/MainScreen'
 import { GuideScreen } from './screens/GuideScreen'
 import { LoadingScreen } from './screens/LoadingScreen'
@@ -218,28 +217,21 @@ function SpotifyPreviewPanel({
 }
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('main')
+  // Migration(플레이리스트 이전 작업)의 화면 흐름·선택·매칭·내보내기 상태는 리듀서가 관리한다.
+  const [migration, dispatch] = useReducer(migrationReducer, initialMigrationState)
+  const { screen, result, selectedPlaylists, selectedSongs, preview, selected, exportStatuses } =
+    migration
+  const loading = migration.extracting
+  const uploading = migration.matching
+  const exportingAll = migration.exporting
+  const error = migration.extractError
+  const uploadError = migration.matchError
+
   const [status, setStatus] = useState<PopupStatus>('checking')
   const [session, setSession] = useState<MelonSessionResult | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [result, setResult] = useState<ExtractResult | null>(null)
-  // 추출된 플레이리스트 중 preview 요청 대상으로 선택된 seq 집합
-  const [selectedPlaylists, setSelectedPlaylists] = useState<Set<string>>(new Set())
-  // 선택된 곡: `${playlist_seq}:${songId}` 집합 (플레이리스트 스코프)
-  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set())
+  // 멜론 세션 확인 실패 에러 (Migration 플로우와 무관한 팝업 상태 점검용)
+  const [checkError, setCheckError] = useState<string | null>(null)
   const [memberKey, setMemberKey] = useState<string | null>(null)
-
-  // Spotify 매칭 미리보기 / 선택 / 내보내기
-  // preview: 서버가 돌려준 곡별 Spotify 후보 목록
-  const [preview, setPreview] = useState<MelonTrackResult[] | null>(null)
-  // selected: `${playlist_id}:${melon_song_id}` → 선택된 Spotify track id (플레이리스트 스코프, 곡당 단일)
-  const [selected, setSelected] = useState<Record<string, string>>({})
-  const [exportingAll, setExportingAll] = useState(false)
-  // 플레이리스트 seq → export 진행/결과 상태
-  const [exportStatuses, setExportStatuses] = useState<PlaylistExportStatusMap>({})
 
   // Spotify
   const [spotifyLoggedIn, setSpotifyLoggedIn] = useState(false)
@@ -254,12 +246,7 @@ export function App() {
     void loadSession()
       .then((saved) => {
         if (!saved) return
-        setScreen(resolveRestoredScreen(saved.screen, !!saved.result, !!saved.preview))
-        setResult(saved.result)
-        setSelectedPlaylists(new Set(saved.selectedPlaylists))
-        setSelectedSongs(new Set(saved.selectedSongs))
-        setPreview(saved.preview)
-        setSelected(saved.selected)
+        dispatch({ type: 'SESSION_RESTORED', session: saved })
       })
       .finally(() => setRestored(true))
   }, [])
@@ -284,7 +271,7 @@ export function App() {
 
   async function checkSession() {
     setStatus('checking')
-    setError(null)
+    setCheckError(null)
     setSession(null)
     try {
       // 로그인 진위는 멜론 MLCP 쿠키로 판단(페이지 무관, 콘텐츠 스크립트 불필요)
@@ -319,7 +306,7 @@ export function App() {
       setStatus('ready')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
+      setCheckError(msg)
       setStatus('error')
     }
   }
@@ -331,20 +318,18 @@ export function App() {
     })
   }, [])
 
-  // 로딩 완료 시 선택 화면으로 자동 전환
+  // 로딩 완료 시 선택 화면으로 자동 전환 (전환 조건 판정은 리듀서가 한다)
   useEffect(() => {
     if (screen === 'loading' && result && !loading) {
-      const timer = setTimeout(() => setScreen('select'), 600)
+      const timer = setTimeout(() => dispatch({ type: 'LOADING_FINISHED' }), 600)
       return () => clearTimeout(timer)
     }
   }, [screen, result, loading])
 
-  // 매칭 완료 시 review 또는 app 화면으로 자동 전환
+  // 매칭 완료 시 review 또는 app 화면으로 자동 전환 (분기 판정은 리듀서가 한다)
   useEffect(() => {
     if (screen === 'matching' && preview && !uploading) {
-      const ambiguous = preview.filter((r) => r.results.length >= 2)
-      const nextScreen = ambiguous.length > 0 ? 'review' : 'app'
-      const timer = setTimeout(() => setScreen(nextScreen), 600)
+      const timer = setTimeout(() => dispatch({ type: 'MATCHING_FINISHED' }), 600)
       return () => clearTimeout(timer)
     }
   }, [screen, preview, uploading])
@@ -368,19 +353,11 @@ export function App() {
   }
 
   async function handleExtract() {
-    setLoading(true)
-    setError(null)
-    setUploadError(null)
-    setResult(null)
-    setSelectedPlaylists(new Set())
-    setSelectedSongs(new Set())
-    setPreview(null)
-    setSelected({})
-    setExportStatuses({})
+    dispatch({ type: 'EXTRACT_STARTED' })
 
     // 로그인(쿠키)이 없으면 데이터를 가져올 수 없으므로 멜론 로그인 페이지로 보낸다.
     if (!memberKey) {
-      setLoading(false)
+      dispatch({ type: 'EXTRACT_ABORTED' })
       setSession({ status: 'LOGGED_OUT' })
       await chrome.tabs.create({ url: MELON_LOGIN_TARGET, active: true })
       return
@@ -396,46 +373,39 @@ export function App() {
       })
       createdTabId = created.id ?? null
       if (createdTabId == null) {
-        setError('멜론 탭을 열 수 없어요. 다시 시도해주세요.')
-        setLoading(false)
+        dispatch({ type: 'EXTRACT_FAILED', error: '멜론 탭을 열 수 없어요. 다시 시도해주세요.' })
         return
       }
 
       const res = await requestExtract(createdTabId)
       if (res.ok) {
-        setResult(res.result)
-        // 기본값: 추출된 플레이리스트 + 곡 전부 선택
-        setSelectedPlaylists(new Set(res.result.playlists.map((pl) => pl.seq)))
-        setSelectedSongs(
-          new Set(
-            res.result.playlists.flatMap((pl) =>
-              pl.songs.map((s) => songSelectionKey(pl.seq, s.songId)),
-            ),
-          ),
-        )
+        dispatch({ type: 'EXTRACT_SUCCEEDED', result: res.result })
         setSession({ status: 'LOGGED_IN', playlistCount: res.result.playlists.length })
       } else if (res.error === 'NOT_LOGGED_IN') {
-        setError('멜론에 로그인 후 다시 시도해주세요.')
+        dispatch({ type: 'EXTRACT_FAILED', error: '멜론에 로그인 후 다시 시도해주세요.' })
         setSession({ status: 'LOGGED_OUT' })
       } else if (res.error === 'PLAYLIST_IDS_NOT_FOUND' || res.error === 'PLAYLIST_LIST_EMPTY') {
-        setError('플레이리스트를 찾지 못했습니다. 멜론에 로그인한 계정인지 확인해주세요.')
+        dispatch({
+          type: 'EXTRACT_FAILED',
+          error: '플레이리스트를 찾지 못했습니다. 멜론에 로그인한 계정인지 확인해주세요.',
+        })
         setSession({ status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 })
       } else {
-        setError(`추출 실패: ${res.error}`)
+        dispatch({ type: 'EXTRACT_FAILED', error: `추출 실패: ${res.error}` })
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      setError(
-        msg.includes('Receiving end does not exist')
+      dispatch({
+        type: 'EXTRACT_FAILED',
+        error: msg.includes('Receiving end does not exist')
           ? '멜론 페이지를 불러오지 못했어요. 잠시 후 다시 시도해주세요.'
           : msg,
-      )
+      })
     } finally {
       // 추출용으로 연 백그라운드 탭은 정리한다.
       if (createdTabId != null) {
         void chrome.tabs.remove(createdTabId).catch(() => {})
       }
-      setLoading(false)
     }
   }
 
@@ -450,11 +420,7 @@ export function App() {
 
   async function handleUpload() {
     if (!result || chosenPlaylists.length === 0) return
-    setUploading(true)
-    setUploadError(null)
-    setPreview(null)
-    setSelected({})
-    setExportStatuses({})
+    dispatch({ type: 'MATCH_STARTED' })
     try {
       // 선택한 플레이리스트의 선택한 곡만 preview를 클라이언트에서 병렬 요청하고 결과를 병합한다.
       // 한 플레이리스트가 실패해도 나머지는 표시(부분 성공).
@@ -478,173 +444,54 @@ export function App() {
           | PromiseRejectedResult
           | undefined
         const reason = firstError?.reason
-        setUploadError(reason instanceof Error ? reason.message : String(reason ?? '매칭 결과가 없습니다.'))
+        dispatch({
+          type: 'MATCH_FAILED',
+          error: reason instanceof Error ? reason.message : String(reason ?? '매칭 결과가 없습니다.'),
+        })
       } else {
-        setPreview(merged)
-        // 기본값: 후보가 2개 이상인 곡은 첫 번째 후보를 선택해 둔다.
-        const defaultSelected: Record<string, string> = {}
-        for (const row of merged) {
-          if (row.results.length >= 2) {
-            defaultSelected[spotifySelectionKey(row.playlist_id, row.melon_song_id)] =
-              row.results[0].id
-          }
-        }
-        setSelected(defaultSelected)
-        if (failedCount > 0) {
-          setUploadError(`${failedCount}개 플레이리스트 매칭 실패 (성공분만 표시)`)
-        }
+        dispatch({ type: 'MATCH_SUCCEEDED', preview: merged, failedCount })
       }
     } catch (e) {
-      setUploadError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setUploading(false)
+      dispatch({ type: 'MATCH_FAILED', error: e instanceof Error ? e.message : String(e) })
     }
-  }
-
-  // 플레이리스트 선택이 바뀌면 기존 preview는 더 이상 그 집합과 일치하지 않으므로 초기화
-  function resetPreviewState() {
-    setPreview(null)
-    setSelected({})
-    setExportStatuses({})
   }
 
   // 레거시 디버그 화면 전용: 플레이리스트 선택/해제 시 해당 곡도 일괄 토글
   function togglePlaylist(seq: string) {
-    resetPreviewState()
-    const pl = result?.playlists.find((p) => p.seq === seq)
-    setSelectedPlaylists((prev) => {
-      const next = new Set(prev)
-      if (next.has(seq)) next.delete(seq)
-      else next.add(seq)
-      return next
-    })
-    if (pl) {
-      setSelectedSongs((prev) => {
-        const next = new Set(prev)
-        const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
-        const adding = !selectedPlaylists.has(seq)
-        for (const k of keys) {
-          if (adding) next.add(k)
-          else next.delete(k)
-        }
-        return next
-      })
-    }
+    dispatch({ type: 'PLAYLIST_TOGGLED', playlistSeq: seq })
   }
 
   function toggleAllPlaylists() {
-    if (!result) return
-    resetPreviewState()
-    const wasAllSelected = selectedPlaylists.size === result.playlists.length
-    setSelectedPlaylists(
-      wasAllSelected ? new Set() : new Set(result.playlists.map((pl) => pl.seq)),
-    )
-    // 전체선택/해제 시 곡도 일괄 토글
-    setSelectedSongs(() => {
-      if (wasAllSelected) return new Set()
-      const all = new Set<string>()
-      for (const pl of result.playlists) {
-        for (const s of pl.songs) {
-          all.add(songSelectionKey(pl.seq, s.songId))
-        }
-      }
-      return all
-    })
+    dispatch({ type: 'ALL_PLAYLISTS_TOGGLED' })
   }
 
   function toggleSong(playlistSeq: string, songId: string) {
-    resetPreviewState()
-    const key = songSelectionKey(playlistSeq, songId)
-    const willSelect = !selectedSongs.has(key)
-    setSelectedSongs((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-    // 곡이 1개라도 선택돼 있으면 플레이리스트를 선택 상태로 동기화한다.
-    const pl = result?.playlists.find((p) => p.seq === playlistSeq)
-    if (pl) {
-      const otherSelected = pl.songs.some(
-        (s) => s.songId !== songId && selectedSongs.has(songSelectionKey(pl.seq, s.songId)),
-      )
-      setSelectedPlaylists((prev) => {
-        const next = new Set(prev)
-        if (willSelect || otherSelected) next.add(pl.seq)
-        else next.delete(pl.seq)
-        return next
-      })
-    }
+    dispatch({ type: 'SONG_TOGGLED', playlistSeq, songId })
   }
 
   // 해당 플레이리스트의 곡 전체 선택/해제 토글 (카드 왼쪽 체크 버튼)
   function toggleAllSongs(pl: Playlist) {
-    resetPreviewState()
-    const keys = pl.songs.map((s) => songSelectionKey(pl.seq, s.songId))
-    const allOn = keys.every((k) => selectedSongs.has(k))
-    setSelectedSongs((prev) => {
-      const next = new Set(prev)
-      for (const k of keys) {
-        if (allOn) next.delete(k)
-        else next.add(k)
-      }
-      return next
-    })
-    // 전체 선택 → 플레이리스트 포함, 전체 해제 → 제외
-    setSelectedPlaylists((prev) => {
-      const next = new Set(prev)
-      if (allOn) next.delete(pl.seq)
-      else next.add(pl.seq)
-      return next
-    })
+    dispatch({ type: 'PLAYLIST_SONGS_TOGGLED', playlistSeq: pl.seq })
   }
 
   function selectTrack(playlistId: string, songId: string, trackId: string) {
-    setExportStatuses({})
-    setSelected((prev) => ({
-      ...prev,
-      [spotifySelectionKey(playlistId, songId)]: trackId,
-    }))
+    dispatch({ type: 'TRACK_SELECTED', playlistId, songId, trackId })
   }
 
   function clearSelection(playlistId: string, songId: string) {
-    setExportStatuses({})
-    setSelected((prev) => {
-      const next = { ...prev }
-      delete next[spotifySelectionKey(playlistId, songId)]
-      return next
-    })
+    dispatch({ type: 'TRACK_SELECTION_CLEARED', playlistId, songId })
   }
 
   async function handleExport(selectionOverride?: Record<string, string>) {
     if (!preview || previewGroups.length === 0) return
 
-    // review 화면에서 막 확정한 선택은 setSelected 직후라 state 반영 전이므로 인자로 우선 사용한다.
+    // review 화면에서 막 확정한 선택은 dispatch 직후라 state 반영 전이므로 인자로 우선 사용한다.
     const sel = selectionOverride ?? selected
     // 클라이언트에서 플레이리스트별 잡(payload)을 순차 수집한다.
     const jobs = buildPlaylistExportJobs(previewGroups, sel)
-    if (jobs.length === 0) {
-      setExportStatuses(
-        Object.fromEntries(
-          previewGroups.map((group) => [
-            group.playlist.seq,
-            { status: 'skipped' as const, reason: '내보낼 수 있는 Spotify 후보가 없습니다.' },
-          ]),
-        ),
-      )
-      return
-    }
-
-    // 잡이 있는 플레이리스트는 exporting, 없는 건 skipped 로 초기화
-    const initialStatuses: PlaylistExportStatusMap = {}
-    for (const group of previewGroups) {
-      initialStatuses[group.playlist.seq] = jobs.some((job) => job.playlistSeq === group.playlist.seq)
-        ? { status: 'exporting' }
-        : { status: 'skipped', reason: '내보낼 수 있는 Spotify 후보가 없습니다.' }
-    }
-
-    setExportingAll(true)
-    setExportStatuses(initialStatuses)
+    // 잡이 있는 플레이리스트는 exporting, 없는 건 skipped 로 초기화된다.
+    dispatch({ type: 'EXPORT_STARTED', jobs })
+    if (jobs.length === 0) return
 
     try {
       // 수집한 잡을 병렬 전송한다. 각 잡은 완료 즉시 해당 플레이리스트 상태만 갱신하며,
@@ -657,25 +504,26 @@ export function App() {
               payload: job.payload,
             })) as ExportToSpotifyResponse
 
-            setExportStatuses((prev) => ({
-              ...prev,
-              [job.playlistSeq]: res.ok
-                ? { status: 'success', exportedCount: job.payload.track_ids.length }
-                : { status: 'error', error: res.error },
-            }))
+            if (res.ok) {
+              dispatch({
+                type: 'EXPORT_JOB_SUCCEEDED',
+                playlistSeq: job.playlistSeq,
+                exportedCount: job.payload.track_ids.length,
+              })
+            } else {
+              dispatch({ type: 'EXPORT_JOB_FAILED', playlistSeq: job.playlistSeq, error: res.error })
+            }
           } catch (e) {
-            setExportStatuses((prev) => ({
-              ...prev,
-              [job.playlistSeq]: {
-                status: 'error',
-                error: e instanceof Error ? e.message : String(e),
-              },
-            }))
+            dispatch({
+              type: 'EXPORT_JOB_FAILED',
+              playlistSeq: job.playlistSeq,
+              error: e instanceof Error ? e.message : String(e),
+            })
           }
         }),
       )
     } finally {
-      setExportingAll(false)
+      dispatch({ type: 'EXPORT_FINISHED' })
     }
   }
 
@@ -733,15 +581,15 @@ export function App() {
   }
 
   if (screen === 'main') {
-    return <MainScreen onStart={() => setScreen('guide')} />
+    return <MainScreen onStart={() => dispatch({ type: 'START' })} />
   }
 
   if (screen === 'guide') {
     return (
       <GuideScreen
-        onBack={() => setScreen('main')}
+        onBack={() => dispatch({ type: 'BACK' })}
         onNext={() => {
-          setScreen('loading')
+          dispatch({ type: 'GUIDE_CONFIRMED' })
           void handleExtract()
         }}
       />
@@ -760,7 +608,7 @@ export function App() {
     if (allDone) {
       return (
         <LoadingScreen
-          onBack={() => setScreen('guide')}
+          onBack={() => dispatch({ type: 'BACK' })}
           progress={100}
           statusMessage="완료! 다음 단계로 이동합니다."
           steps={loadingSteps}
@@ -770,7 +618,7 @@ export function App() {
 
     return (
       <LoadingScreen
-        onBack={() => setScreen('guide')}
+        onBack={() => dispatch({ type: 'BACK' })}
         progress={loading ? Math.max(progress, 15) : progress}
         statusMessage={
           error
@@ -794,8 +642,8 @@ export function App() {
         onToggleAllPlaylists={toggleAllPlaylists}
         onToggleSong={toggleSong}
         onToggleAllSongs={toggleAllSongs}
-        onBack={() => setScreen('guide')}
-        onNext={() => setScreen('platform')}
+        onBack={() => dispatch({ type: 'BACK' })}
+        onNext={() => dispatch({ type: 'SELECT_CONFIRMED' })}
       />
     )
   }
@@ -803,12 +651,12 @@ export function App() {
   if (screen === 'platform') {
     return (
       <PlatformScreen
-        onBack={() => setScreen('select')}
+        onBack={() => dispatch({ type: 'BACK' })}
         onNext={(platform) => {
           if (platform === 'spotify') {
             // Spotify 로그인 확인 후 매칭 시작
             if (spotifyLoggedIn) {
-              setScreen('matching')
+              dispatch({ type: 'PLATFORM_CONFIRMED' })
               void handleUpload()
             } else {
               // OAuth 로그인 트리거 → 성공 시 매칭 진행
@@ -817,7 +665,7 @@ export function App() {
                 setSpotifyLoading(false)
                 if (res?.success) {
                   setSpotifyLoggedIn(true)
-                  setScreen('matching')
+                  dispatch({ type: 'PLATFORM_CONFIRMED' })
                   void handleUpload()
                 } else {
                   setSpotifyError(res?.error ?? 'Login failed')
@@ -838,7 +686,7 @@ export function App() {
 
     return (
       <MatchingScreen
-        onBack={() => setScreen('platform')}
+        onBack={() => dispatch({ type: 'BACK' })}
         playlistCount={selectedPlaylistList.length}
         totalSongs={totalSongs}
         matchedCount={matchedCount}
@@ -856,14 +704,13 @@ export function App() {
 
     return (
       <ReviewScreen
-        onBack={() => setScreen('matching')}
+        onBack={() => dispatch({ type: 'BACK' })}
         tracks={ambiguous}
         autoMatchedCount={autoMatched}
         onNext={(reviewSelected) => {
-          setSelected(reviewSelected)
-          // 후보 선택 완료 → 내보내기 실행 (setSelected 반영 전이므로 선택값을 직접 전달)
+          dispatch({ type: 'REVIEW_SUBMITTED', selected: reviewSelected })
+          // 후보 선택 완료 → 내보내기 실행 (dispatch 반영 전이므로 선택값을 직접 전달)
           void handleExport(reviewSelected)
-          setScreen('complete')
         }}
       />
     )
@@ -875,7 +722,7 @@ export function App() {
 
     return (
       <CompleteScreen
-        onBack={() => setScreen('review')}
+        onBack={() => dispatch({ type: 'BACK' })}
         playlistCount={chosenPlaylists.length}
         songCount={exportedCount}
         totalSelected={totalSongs}
@@ -971,7 +818,7 @@ export function App() {
         </div>
       )}
 
-      {error && <p className="text-red-600">{error}</p>}
+      {(error ?? checkError) && <p className="text-red-600">{error ?? checkError}</p>}
       {result && (
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between">
