@@ -20,6 +20,7 @@ import {
   type PlaylistPreviewGroup,
 } from '../lib/playlistPreview'
 import { memberKeyFromMlcp } from '../lib/melonClient'
+import { loadSession, resolveRestoredScreen, saveSession, type Screen } from './sessionState'
 import { MainScreen } from './screens/MainScreen'
 import { GuideScreen } from './screens/GuideScreen'
 import { LoadingScreen } from './screens/LoadingScreen'
@@ -28,8 +29,6 @@ import { PlatformScreen } from './screens/PlatformScreen'
 import { MatchingScreen } from './screens/MatchingScreen'
 import { ReviewScreen } from './screens/ReviewScreen'
 import { CompleteScreen } from './screens/CompleteScreen'
-
-type Screen = 'main' | 'guide' | 'loading' | 'select' | 'platform' | 'matching' | 'review' | 'complete' | 'app'
 
 const MELON_PLAYLIST_LIST_URL = 'https://www.melon.com/mymusic/playlist/mymusicplaylist_list.htm'
 
@@ -246,6 +245,36 @@ export function App() {
   const [spotifyLoggedIn, setSpotifyLoggedIn] = useState(false)
   const [spotifyLoading, setSpotifyLoading] = useState(false)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
+
+  // 팝업 재오픈 시 chrome.storage.session에서 진행 상태 복원 (#10).
+  // 복원이 끝나기 전에는 화면을 그리지 않아 main 화면이 잠깐 보이는 깜빡임을 막는다.
+  const [restored, setRestored] = useState(false)
+
+  useEffect(() => {
+    void loadSession()
+      .then((saved) => {
+        if (!saved) return
+        setScreen(resolveRestoredScreen(saved.screen, !!saved.result, !!saved.preview))
+        setResult(saved.result)
+        setSelectedPlaylists(new Set(saved.selectedPlaylists))
+        setSelectedSongs(new Set(saved.selectedSongs))
+        setPreview(saved.preview)
+        setSelected(saved.selected)
+      })
+      .finally(() => setRestored(true))
+  }, [])
+
+  useEffect(() => {
+    if (!restored) return
+    void saveSession({
+      screen,
+      result,
+      selectedPlaylists: [...selectedPlaylists],
+      selectedSongs: [...selectedSongs],
+      preview,
+      selected,
+    })
+  }, [restored, screen, result, selectedPlaylists, selectedSongs, preview, selected])
 
   async function getActiveMelonTab() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -697,6 +726,11 @@ export function App() {
     (sum, group) => sum + group.rows.filter((row) => row.results.length === 1).length,
     0,
   )
+
+  // 세션 복원 전에는 그리지 않는다 (복원 직후 화면으로 바로 진입)
+  if (!restored) {
+    return null
+  }
 
   if (screen === 'main') {
     return <MainScreen onStart={() => setScreen('guide')} />
