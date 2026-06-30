@@ -1,7 +1,7 @@
 {
-  "name": "muma-client",
+  "name": "muma",
   "version": "0.0.1",
-  "description": "Chrome Extension (Manifest V3) starter with CRXJS + React + Vite + TypeScript",
+  "description": "멜론 플레이리스트를 Spotify와 YouTube Music으로 쉽게 옮깁니다.",
   "type": "module",
   "private": true,
   "scripts": {

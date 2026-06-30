@@ -25,7 +25,7 @@ export default defineManifest((env) => {
     manifest_version: 3,
     // Chrome Web Store 업로드용 빌드에는 key를 포함할 수 없다.
     ...(env.command === 'serve' ? { key: DEVELOPMENT_EXTENSION_KEY } : {}),
-    name: 'Muma Client',
+    name: 'muma',
     version: pkg.version,
     description: pkg.description,
 
