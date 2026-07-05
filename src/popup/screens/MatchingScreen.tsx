@@ -1,7 +1,10 @@
+import type { TargetPlatform } from '../../lib/types'
+import { PLATFORM_LABELS } from '../../lib/platform'
 import { ScreenLayout, ScreenHeader, StatCard } from '../../components/ui'
 
 interface MatchingScreenProps {
   onBack: () => void
+  platform: TargetPlatform
   playlistCount: number
   totalSongs: number
   matchedCount: number
@@ -36,10 +39,11 @@ function VinylMatching() {
   )
 }
 
-export function MatchingScreen({ onBack, playlistCount, totalSongs, matchedCount, processingCount, progress }: MatchingScreenProps) {
+export function MatchingScreen({ onBack, platform, playlistCount, totalSongs, matchedCount, processingCount, progress }: MatchingScreenProps) {
+  const platformLabel = PLATFORM_LABELS[platform]
   return (
     <ScreenLayout onBack={onBack}>
-      <ScreenHeader title="Spotify로 옮기는 중이에요" subtitle="선택한 플레이리스트와 곡을 Spotify에서 매칭하고 있어요." />
+      <ScreenHeader title={`${platformLabel}로 옮기는 중이에요`} subtitle={`선택한 플레이리스트와 곡을 ${platformLabel}에서 매칭하고 있어요.`} />
 
       <div className="flex w-full shrink-0 justify-center">
         <VinylMatching />

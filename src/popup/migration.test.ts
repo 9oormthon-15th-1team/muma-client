@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { ExtractResult, MelonTrackResult, SpotifyTrack } from '../lib/types'
+import type { ExtractResult, MelonTrackResult, TrackCandidate } from '../lib/types'
 import { initialMigrationState, migrationReducer, type MigrationState } from './migration'
 
-function makeTrack(id: string): SpotifyTrack {
+function makeTrack(id: string): TrackCandidate {
   return {
     id,
     name: `track-${id}`,
@@ -66,7 +66,12 @@ describe('migrationReducer', () => {
     expect(migrationReducer(onGuide, { type: 'GUIDE_CONFIRMED' }).screen).toBe('loading')
 
     const onPlatform: MigrationState = { ...initialMigrationState, screen: 'platform' }
-    expect(migrationReducer(onPlatform, { type: 'PLATFORM_CONFIRMED' }).screen).toBe('matching')
+    const confirmed = migrationReducer(onPlatform, {
+      type: 'PLATFORM_CONFIRMED',
+      platform: 'ytmusic',
+    })
+    expect(confirmed.screen).toBe('matching')
+    expect(confirmed.platform).toBe('ytmusic')
   })
 
   it('EXTRACT_STARTED는 이전 진행 데이터를 모두 비우되 화면은 바꾸지 않는다 (디버그 화면에서도 호출됨)', () => {
@@ -484,6 +489,8 @@ describe('migrationReducer', () => {
     expect(next.result).toBe(result)
     expect(next.selectedPlaylists).toEqual(new Set(['1']))
     expect(next.selectedSongs).toEqual(new Set(['1:s1']))
+    // platform 없는 구버전 세션은 spotify로 폴백
+    expect(next.platform).toBe('spotify')
 
     // preview까지 있으면 저장된 화면 그대로 복원
     const preview = [makeRow('1', 's1', ['t1', 't2'])]
@@ -491,6 +498,7 @@ describe('migrationReducer', () => {
       type: 'SESSION_RESTORED',
       session: {
         screen: 'review',
+        platform: 'ytmusic',
         result,
         selectedPlaylists: ['1'],
         selectedSongs: ['1:s1'],
@@ -500,6 +508,7 @@ describe('migrationReducer', () => {
     })
 
     expect(full.screen).toBe('review')
+    expect(full.platform).toBe('ytmusic')
     expect(full.preview).toBe(preview)
     expect(full.selected).toEqual({ '1:s1': 't1' })
   })

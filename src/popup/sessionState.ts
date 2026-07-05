@@ -1,4 +1,4 @@
-import type { ExtractResult, MelonTrackResult } from '../lib/types'
+import type { ExtractResult, MelonTrackResult, TargetPlatform } from '../lib/types'
 
 export type Screen =
   | 'main'
@@ -16,6 +16,8 @@ export type Screen =
 // 진행 중 플래그(loading/uploading)·에러·로그인 상태는 마운트 시 재확인하므로 저장하지 않는다.
 export interface PersistedSession {
   screen: Screen
+  /** 구버전 세션에는 없을 수 있다 — 복원 시 spotify로 폴백 */
+  platform?: TargetPlatform
   result: ExtractResult | null
   selectedPlaylists: string[]
   selectedSongs: string[]

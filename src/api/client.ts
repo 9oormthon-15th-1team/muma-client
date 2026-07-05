@@ -2,6 +2,7 @@ import type {
   MelonTrackRequest,
   MelonTrackResult,
   SpotifyExportRequest,
+  YoutubeExportRequest,
 } from '../lib/types'
 
 interface ApiResponse<T = void> {
@@ -45,9 +46,9 @@ function getBaseUrl(): string {
 
 async function request<T>(
   path: string,
-  options: RequestInit & { spotifyToken?: string } = {},
+  options: RequestInit & { spotifyToken?: string; youtubeToken?: string } = {},
 ): Promise<ApiResponse<T>> {
-  const { spotifyToken, headers: customHeaders, ...fetchOptions } = options
+  const { spotifyToken, youtubeToken, headers: customHeaders, ...fetchOptions } = options
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -56,6 +57,9 @@ async function request<T>(
 
   if (spotifyToken) {
     headers['X-Muma-Spotify-Token'] = spotifyToken
+  }
+  if (youtubeToken) {
+    headers['X-Muma-Youtube-Token'] = youtubeToken
   }
 
   // 슬롯을 먼저 확보한 뒤 타임아웃을 시작한다 — 대기 큐에서 머문 시간은 타임아웃에 포함하지 않는다.
@@ -104,6 +108,27 @@ export async function exportToSpotify(
   await request('/api/spotify/export', {
     method: 'POST',
     spotifyToken,
+    body: JSON.stringify(data),
+  })
+}
+
+export async function previewYoutubeTracks(
+  tracks: MelonTrackRequest[],
+): Promise<MelonTrackResult[]> {
+  const response = await request<MelonTrackResult[]>('/api/youtube/preview', {
+    method: 'POST',
+    body: JSON.stringify(tracks),
+  })
+  return response.data ?? []
+}
+
+export async function exportToYoutube(
+  youtubeToken: string,
+  data: YoutubeExportRequest,
+): Promise<void> {
+  await request('/api/youtube/export', {
+    method: 'POST',
+    youtubeToken,
     body: JSON.stringify(data),
   })
 }

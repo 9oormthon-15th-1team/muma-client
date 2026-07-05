@@ -1,6 +1,8 @@
 import type {
   ExportToSpotifyRequest,
   ExportToSpotifyResponse,
+  ExportToYoutubeRequest,
+  ExportToYoutubeResponse,
   SpotifyExportRequest,
   SpotifyLoginRequest,
   SpotifyLogoutRequest,
@@ -8,6 +10,13 @@ import type {
   SpotifyStatusRequest,
   SpotifyStatusResponse,
   SpotifyTokenResponse,
+  YoutubeExportRequest,
+  YoutubeLoginRequest,
+  YoutubeLogoutRequest,
+  YoutubeLogoutResponse,
+  YoutubeStatusRequest,
+  YoutubeStatusResponse,
+  YoutubeTokenResponse,
 } from '../lib/types'
 
 // 팝업 → 백그라운드 메시지 어댑터.
@@ -31,5 +40,27 @@ export function requestSpotifyExport(
   payload: SpotifyExportRequest,
 ): Promise<ExportToSpotifyResponse> {
   const request: ExportToSpotifyRequest = { type: 'EXPORT_TO_SPOTIFY', payload }
+  return chrome.runtime.sendMessage(request)
+}
+
+export function getYoutubeStatus(): Promise<YoutubeStatusResponse> {
+  const request: YoutubeStatusRequest = { type: 'YOUTUBE_STATUS' }
+  return chrome.runtime.sendMessage(request)
+}
+
+export function youtubeLogin(): Promise<YoutubeTokenResponse> {
+  const request: YoutubeLoginRequest = { type: 'YOUTUBE_LOGIN' }
+  return chrome.runtime.sendMessage(request)
+}
+
+export function youtubeLogout(): Promise<YoutubeLogoutResponse> {
+  const request: YoutubeLogoutRequest = { type: 'YOUTUBE_LOGOUT' }
+  return chrome.runtime.sendMessage(request)
+}
+
+export function requestYoutubeExport(
+  payload: YoutubeExportRequest,
+): Promise<ExportToYoutubeResponse> {
+  const request: ExportToYoutubeRequest = { type: 'EXPORT_TO_YOUTUBE', payload }
   return chrome.runtime.sendMessage(request)
 }

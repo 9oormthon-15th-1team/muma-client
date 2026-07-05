@@ -1,13 +1,23 @@
-import { exportToSpotify } from '../api/client'
+import { exportToSpotify, exportToYoutube } from '../api/client'
 import type {
   BackgroundRequest,
   ExportToSpotifyResponse,
+  ExportToYoutubeResponse,
   PongResponse,
   SpotifyLogoutResponse,
   SpotifyStatusResponse,
   SpotifyTokenResponse,
+  YoutubeLogoutResponse,
+  YoutubeStatusResponse,
+  YoutubeTokenResponse,
 } from '../lib/types'
 import { login, getStoredTokens, clearTokens, getValidAccessToken } from '../spotify/auth'
+import {
+  login as youtubeLogin,
+  getStoredTokens as getStoredYoutubeTokens,
+  clearTokens as clearYoutubeTokens,
+  getValidAccessToken as getValidYoutubeAccessToken,
+} from '../youtube/auth'
 
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('[muma] 설치/업데이트:', details.reason)
@@ -79,6 +89,67 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
       })
       .catch((err: Error) => {
         const response: SpotifyLogoutResponse = { success: false, error: err.message }
+        sendResponse(response)
+      })
+    return true
+  }
+
+  if (message?.type === 'EXPORT_TO_YOUTUBE') {
+    const { payload } = message
+    getValidYoutubeAccessToken()
+      .then((token) => exportToYoutube(token, payload))
+      .then(() => {
+        console.info('[muma] youtube export:success', payload.playlist_name)
+        const response: ExportToYoutubeResponse = { ok: true }
+        sendResponse(response)
+      })
+      .catch((err: unknown) => {
+        console.error('[muma] youtube export:failed', err)
+        const response: ExportToYoutubeResponse = {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        }
+        sendResponse(response)
+      })
+    return true
+  }
+
+  if (message?.type === 'YOUTUBE_LOGIN') {
+    youtubeLogin()
+      .then((tokens) => {
+        console.log('[background] youtube login success')
+        const response: YoutubeTokenResponse = { success: true, accessToken: tokens.accessToken }
+        sendResponse(response)
+      })
+      .catch((err: Error) => {
+        console.error('[background] youtube login error:', err)
+        const response: YoutubeTokenResponse = { success: false, error: err.message }
+        sendResponse(response)
+      })
+    return true
+  }
+
+  if (message?.type === 'YOUTUBE_STATUS') {
+    getStoredYoutubeTokens()
+      .then((tokens) => {
+        const response: YoutubeStatusResponse = { loggedIn: tokens !== null }
+        sendResponse(response)
+      })
+      .catch(() => {
+        const response: YoutubeStatusResponse = { loggedIn: false }
+        sendResponse(response)
+      })
+    return true
+  }
+
+  if (message?.type === 'YOUTUBE_LOGOUT') {
+    clearYoutubeTokens()
+      .then(() => {
+        const response: YoutubeLogoutResponse = { success: true }
+        sendResponse(response)
+      })
+      .catch((err: Error) => {
+        const response: YoutubeLogoutResponse = { success: false, error: err.message }
         sendResponse(response)
       })
     return true

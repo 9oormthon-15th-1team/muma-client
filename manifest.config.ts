@@ -65,6 +65,12 @@ export default defineManifest((env) => {
 
     // cookies: 팝업에서 멜론 MLCP 쿠키를 읽어 로그인/ memberKey를 페이지 무관하게 확인
     permissions: ['storage', 'activeTab', 'cookies', 'identity'],
-    host_permissions: [`${new URL(apiBaseUrl).origin}/*`, 'https://*.melon.com/*', 'https://accounts.spotify.com/*'],
+    // oauth2.googleapis.com: YouTube OAuth 토큰 교환/갱신 (백그라운드 fetch)
+    host_permissions: [
+      `${new URL(apiBaseUrl).origin}/*`,
+      'https://*.melon.com/*',
+      'https://accounts.spotify.com/*',
+      'https://oauth2.googleapis.com/*',
+    ],
   }
 })

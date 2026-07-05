@@ -1,12 +1,16 @@
 import { useRef } from 'react'
+import type { TargetPlatform } from '../../lib/types'
+import { PLATFORM_HOME_URLS, PLATFORM_LABELS } from '../../lib/platform'
 import { PrimaryButton, IconPlaylist, IconSong, IconExternalLink, StatCard, ScreenLayout, ScreenHeader } from '../../components/ui'
 
 interface CompleteScreenProps {
   onBack: () => void
+  platform: TargetPlatform
   playlistCount: number
   songCount: number
   totalSelected: number
-  spotifyUrl?: string
+  /** 생성된 플레이리스트 URL — 없으면 플랫폼 홈을 연다 */
+  resultUrl?: string
 }
 
 function VinylTurntable() {
@@ -27,15 +31,16 @@ function VinylTurntable() {
   )
 }
 
-export function CompleteScreen({ onBack, playlistCount, songCount, totalSelected, spotifyUrl }: CompleteScreenProps) {
+export function CompleteScreen({ onBack, platform, playlistCount, songCount, totalSelected, resultUrl }: CompleteScreenProps) {
+  const platformLabel = PLATFORM_LABELS[platform]
   // 연타 시 탭이 여러 개 열리는 것을 방지
   const openInFlight = useRef(false)
 
-  function handleOpenSpotify() {
+  function handleOpenResult() {
     if (openInFlight.current) return
     openInFlight.current = true
     void chrome.tabs
-      .create({ url: spotifyUrl || 'https://open.spotify.com' })
+      .create({ url: resultUrl || PLATFORM_HOME_URLS[platform] })
       .finally(() => {
         openInFlight.current = false
       })
@@ -43,7 +48,7 @@ export function CompleteScreen({ onBack, playlistCount, songCount, totalSelected
 
   return (
     <ScreenLayout onBack={onBack}>
-      <ScreenHeader title="성공적으로 옮겼어요" subtitle="Spotify에서 결과를 확인해보세요." />
+      <ScreenHeader title="성공적으로 옮겼어요" subtitle={`${platformLabel}에서 결과를 확인해보세요.`} />
 
       <div className="flex w-full shrink-0 justify-center">
         <VinylTurntable />
@@ -61,8 +66,8 @@ export function CompleteScreen({ onBack, playlistCount, songCount, totalSelected
         <StatCard label="옮긴 곡" value={`${songCount}곡`} accent icon={<IconSong />} />
       </div>
 
-      <PrimaryButton onClick={handleOpenSpotify}>
-        Spotify로 이동하기
+      <PrimaryButton onClick={handleOpenResult}>
+        {platformLabel}로 이동하기
         <IconExternalLink />
       </PrimaryButton>
     </ScreenLayout>

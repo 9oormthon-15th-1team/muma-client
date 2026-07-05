@@ -1,18 +1,19 @@
 import { useState } from 'react'
+import type { TargetPlatform } from '../../lib/types'
 import { PrimaryButton, PlatformCard, ScreenLayout, ScreenHeader } from '../../components/ui'
 
-type Platform = 'spotify' | 'ytmusic' | null
+type Platform = TargetPlatform | null
 
 interface PlatformScreenProps {
   onBack: () => void
-  onNext: (platform: 'spotify' | 'ytmusic') => void
+  onNext: (platform: TargetPlatform) => void
   /** OAuth 등 다음 단계 진행 중 — 버튼에 스피너를 띄우고 중복 클릭을 막는다 */
   loading?: boolean
 }
 
 const PLATFORMS = [
   { id: 'spotify' as const, label: 'Spotify', icon: '/assets/icon-spotify.svg', disabled: false },
-  { id: 'ytmusic' as const, label: 'Youtube music', icon: '/assets/icon-ytmusic.svg', disabled: true },
+  { id: 'ytmusic' as const, label: 'Youtube music', icon: '/assets/icon-ytmusic.svg', disabled: false },
 ]
 
 function VinylTurntable() {

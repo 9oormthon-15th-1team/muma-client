@@ -3,9 +3,10 @@ import type {
   CheckMelonSessionResponse,
   MelonSessionResult,
   Playlist,
-  SpotifyTrack,
+  TargetPlatform,
+  TrackCandidate,
 } from '../lib/types'
-import { previewMelonTracks } from '../api/client'
+import { previewMelonTracks, previewYoutubeTracks } from '../api/client'
 import {
   buildExportTrackIds,
   buildPlaylistExportJobs,
@@ -21,9 +22,12 @@ import { loadSession, saveSession } from './sessionState'
 import { initialMigrationState, migrationReducer } from './migration'
 import {
   getSpotifyStatus,
+  getYoutubeStatus,
   requestSpotifyExport,
+  requestYoutubeExport,
   spotifyLogin,
   spotifyLogout,
+  youtubeLogin,
 } from './backgroundMessages'
 import { extractFromMelon, openMelonLogin, openMyMusicPlaylists } from './melonExtraction'
 import { useSnackbar } from '../components/ui'
@@ -67,8 +71,8 @@ interface SpotifyPreviewPanelProps {
   onSelectTrack: (playlistId: string, songId: string, trackId: string) => void
 }
 
-function smallestAlbumImage(track: SpotifyTrack): string | null {
-  const images = track.album.images
+function smallestAlbumImage(track: TrackCandidate): string | null {
+  const images = track.album?.images
   if (!images?.length) return null
   return [...images].sort((a, b) => a.width * a.height - b.width * b.height)[0].url
 }
@@ -183,7 +187,9 @@ function SpotifyPreviewPanel({
                                 )}
                                 <span>
                                   {track.name} — {track.artists.map((a) => a.name).join(', ')}
-                                  <span className="text-gray-400"> · {track.album.name}</span>
+                                  {track.album && (
+                                    <span className="text-gray-400"> · {track.album.name}</span>
+                                  )}
                                 </span>
                               </label>
                             )
@@ -218,8 +224,16 @@ function SpotifyPreviewPanel({
 export function App() {
   // Migration(플레이리스트 이전 작업)의 화면 흐름·선택·매칭·내보내기 상태는 리듀서가 관리한다.
   const [migration, dispatch] = useReducer(migrationReducer, initialMigrationState)
-  const { screen, result, selectedPlaylists, selectedSongs, preview, selected, exportStatuses } =
-    migration
+  const {
+    screen,
+    platform,
+    result,
+    selectedPlaylists,
+    selectedSongs,
+    preview,
+    selected,
+    exportStatuses,
+  } = migration
   const loading = migration.extracting
   const uploading = migration.matching
   const exportingAll = migration.exporting
@@ -237,6 +251,10 @@ export function App() {
   const [spotifyLoading, setSpotifyLoading] = useState(false)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
 
+  // YouTube
+  const [youtubeLoggedIn, setYoutubeLoggedIn] = useState(false)
+  const [youtubeLoading, setYoutubeLoading] = useState(false)
+
   const { showSnackbar } = useSnackbar()
 
   // 연타로 인한 중복 실행 방지 가드 — state는 리렌더 전 클릭을 못 막으므로 ref를 쓴다.
@@ -244,6 +262,7 @@ export function App() {
   const matchInFlight = useRef(false)
   const exportInFlight = useRef(false)
   const spotifyLoginInFlight = useRef(false)
+  const youtubeLoginInFlight = useRef(false)
 
   // 팝업 재오픈 시 chrome.storage.session에서 진행 상태 복원 (#10).
   // 복원이 끝나기 전에는 화면을 그리지 않아 main 화면이 잠깐 보이는 깜빡임을 막는다.
@@ -262,13 +281,14 @@ export function App() {
     if (!restored) return
     void saveSession({
       screen,
+      platform,
       result,
       selectedPlaylists: [...selectedPlaylists],
       selectedSongs: [...selectedSongs],
       preview,
       selected,
     })
-  }, [restored, screen, result, selectedPlaylists, selectedSongs, preview, selected])
+  }, [restored, screen, platform, result, selectedPlaylists, selectedSongs, preview, selected])
 
   async function getActiveMelonTab() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -325,6 +345,11 @@ export function App() {
         if (res.loggedIn) setSpotifyLoggedIn(true)
       })
       // 백그라운드 미응답 시 비로그인으로 간주 (best-effort 조회)
+      .catch(() => {})
+    void getYoutubeStatus()
+      .then((res) => {
+        if (res.loggedIn) setYoutubeLoggedIn(true)
+      })
       .catch(() => {})
   }, [])
 
@@ -396,18 +421,21 @@ export function App() {
     }
   }
 
-  async function handleUpload() {
+  // PLATFORM_CONFIRMED dispatch 직후에는 state.platform 반영 전이므로 인자로 우선 사용한다.
+  async function handleUpload(platformOverride?: TargetPlatform) {
     if (!result || chosenPlaylists.length === 0) return
     if (matchInFlight.current) return
     matchInFlight.current = true
     dispatch({ type: 'MATCH_STARTED' })
     try {
+      const previewTracks =
+        (platformOverride ?? platform) === 'ytmusic' ? previewYoutubeTracks : previewMelonTracks
       // 선택한 플레이리스트의 선택한 곡만 preview를 클라이언트에서 병렬 요청하고 결과를 병합한다.
       // 한 플레이리스트가 실패해도 나머지는 표시(부분 성공).
       const chosen = chosenPlaylists
       const settled = await Promise.allSettled(
         chosen.map((pl) =>
-          previewMelonTracks(
+          previewTracks(
             mapExtractResultToMelonTracks({
               playlists: [pl],
               extractedAt: result.extractedAt,
@@ -489,7 +517,14 @@ export function App() {
       const results = await Promise.all(
         jobs.map(async (job) => {
           try {
-            const res = await requestSpotifyExport(job.payload)
+            // 잡 payload는 플랫폼 중립(track_ids = 대상 플랫폼 트랙/비디오 id) — 전송 시점에 계약 필드명으로 변환한다.
+            const res =
+              platform === 'ytmusic'
+                ? await requestYoutubeExport({
+                    playlist_name: job.payload.playlist_name,
+                    video_ids: job.payload.track_ids,
+                  })
+                : await requestSpotifyExport(job.payload)
 
             if (res.ok) {
               dispatch({
@@ -541,36 +576,65 @@ export function App() {
       })
   }
 
-  // PlatformScreen에서 플랫폼 확정 시: Spotify 로그인 상태를 확인하고 매칭으로 진행한다.
+  // PlatformScreen에서 플랫폼 확정 시: 해당 플랫폼 로그인 상태를 확인하고 매칭으로 진행한다.
   // OAuth 진행 중 연타는 ref 가드 + 버튼 loading으로 이중 차단한다.
-  function handlePlatformNext(platform: 'spotify' | 'ytmusic') {
-    if (platform !== 'spotify') return
-    if (spotifyLoggedIn) {
-      dispatch({ type: 'PLATFORM_CONFIRMED' })
-      void handleUpload()
+  function handlePlatformNext(nextPlatform: TargetPlatform) {
+    if (nextPlatform === 'spotify') {
+      if (spotifyLoggedIn) {
+        dispatch({ type: 'PLATFORM_CONFIRMED', platform: nextPlatform })
+        void handleUpload(nextPlatform)
+        return
+      }
+      if (spotifyLoginInFlight.current) return
+      spotifyLoginInFlight.current = true
+      setSpotifyLoading(true)
+      spotifyLogin()
+        .then((res) => {
+          if (res.success) {
+            setSpotifyLoggedIn(true)
+            dispatch({ type: 'PLATFORM_CONFIRMED', platform: nextPlatform })
+            void handleUpload(nextPlatform)
+          } else {
+            setSpotifyError(res.error ?? 'Login failed')
+            showSnackbar('Spotify 로그인에 실패했어요. 다시 시도해주세요.')
+          }
+        })
+        .catch((e: unknown) => {
+          setSpotifyError(e instanceof Error ? e.message : String(e))
+          showSnackbar('Spotify 로그인에 실패했어요. 다시 시도해주세요.')
+        })
+        .finally(() => {
+          spotifyLoginInFlight.current = false
+          setSpotifyLoading(false)
+        })
       return
     }
-    if (spotifyLoginInFlight.current) return
-    spotifyLoginInFlight.current = true
-    setSpotifyLoading(true)
-    spotifyLogin()
+
+    // ytmusic — Google 계정 선택창이 뜨는 OAuth (launchWebAuthFlow)
+    if (youtubeLoggedIn) {
+      dispatch({ type: 'PLATFORM_CONFIRMED', platform: nextPlatform })
+      void handleUpload(nextPlatform)
+      return
+    }
+    if (youtubeLoginInFlight.current) return
+    youtubeLoginInFlight.current = true
+    setYoutubeLoading(true)
+    youtubeLogin()
       .then((res) => {
         if (res.success) {
-          setSpotifyLoggedIn(true)
-          dispatch({ type: 'PLATFORM_CONFIRMED' })
-          void handleUpload()
+          setYoutubeLoggedIn(true)
+          dispatch({ type: 'PLATFORM_CONFIRMED', platform: nextPlatform })
+          void handleUpload(nextPlatform)
         } else {
-          setSpotifyError(res.error ?? 'Login failed')
-          showSnackbar('Spotify 로그인에 실패했어요. 다시 시도해주세요.')
+          showSnackbar('Youtube Music 로그인에 실패했어요. 다시 시도해주세요.')
         }
       })
-      .catch((e: unknown) => {
-        setSpotifyError(e instanceof Error ? e.message : String(e))
-        showSnackbar('Spotify 로그인에 실패했어요. 다시 시도해주세요.')
+      .catch(() => {
+        showSnackbar('Youtube Music 로그인에 실패했어요. 다시 시도해주세요.')
       })
       .finally(() => {
-        spotifyLoginInFlight.current = false
-        setSpotifyLoading(false)
+        youtubeLoginInFlight.current = false
+        setYoutubeLoading(false)
       })
   }
 
@@ -688,7 +752,7 @@ export function App() {
       <PlatformScreen
         onBack={() => dispatch({ type: 'BACK' })}
         onNext={handlePlatformNext}
-        loading={spotifyLoading}
+        loading={spotifyLoading || youtubeLoading}
       />
     )
   }
@@ -702,6 +766,7 @@ export function App() {
     return (
       <MatchingScreen
         onBack={() => dispatch({ type: 'BACK' })}
+        platform={platform}
         playlistCount={selectedPlaylistList.length}
         totalSongs={totalSongs}
         matchedCount={matchedCount}
@@ -738,6 +803,7 @@ export function App() {
     return (
       <CompleteScreen
         onBack={() => dispatch({ type: 'BACK' })}
+        platform={platform}
         playlistCount={chosenPlaylists.length}
         songCount={exportedCount}
         totalSelected={totalSongs}
@@ -849,7 +915,7 @@ export function App() {
             </button>
           </div>
           <button
-            onClick={handleUpload}
+            onClick={() => void handleUpload()}
             disabled={uploading || effectiveSongCount === 0}
             className={btn}
           >

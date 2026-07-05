@@ -1,4 +1,4 @@
-import type { ExtractResult, MelonTrackResult } from '../lib/types'
+import type { ExtractResult, MelonTrackResult, TargetPlatform } from '../lib/types'
 import {
   groupPreviewByPlaylist,
   songSelectionKey,
@@ -12,6 +12,8 @@ import { resolveRestoredScreen, type PersistedSession, type Screen } from './ses
 // 화면 전환·선택 상태·매칭/내보내기 진행을 한 곳에서 관리한다.
 export interface MigrationState {
   screen: Screen
+  /** 이전 대상 플랫폼 (PLATFORM_CONFIRMED에서 확정, 기본 spotify) */
+  platform: TargetPlatform
   /** 멜론에서 추출한 플레이리스트 전체 */
   result: ExtractResult | null
   /** preview 요청 대상으로 선택된 플레이리스트 seq 집합 */
@@ -37,7 +39,7 @@ export type MigrationEvent =
   | { type: 'BACK' }
   | { type: 'GUIDE_CONFIRMED' }
   | { type: 'SELECT_CONFIRMED' }
-  | { type: 'PLATFORM_CONFIRMED' }
+  | { type: 'PLATFORM_CONFIRMED'; platform: TargetPlatform }
   // 멜론 추출
   | { type: 'EXTRACT_STARTED' }
   | { type: 'EXTRACT_SUCCEEDED'; result: ExtractResult }
@@ -68,6 +70,7 @@ export type MigrationEvent =
 
 export const initialMigrationState: MigrationState = {
   screen: 'main',
+  platform: 'spotify',
   result: null,
   selectedPlaylists: new Set(),
   selectedSongs: new Set(),
@@ -129,7 +132,7 @@ export function migrationReducer(
     case 'SELECT_CONFIRMED':
       return { ...state, screen: 'platform' }
     case 'PLATFORM_CONFIRMED':
-      return { ...state, screen: 'matching' }
+      return { ...state, screen: 'matching', platform: event.platform }
 
     // --- 멜론 추출 ---
     // 화면 전환 없이 데이터만 초기화한다 — 플로우 화면과 레거시 디버그 화면 양쪽에서 호출된다.
@@ -326,6 +329,8 @@ export function migrationReducer(
       return {
         ...state,
         screen: resolveRestoredScreen(session.screen, !!session.result, !!session.preview),
+        // platform 없는 구버전 세션은 기본값(spotify)으로 복원한다.
+        platform: session.platform ?? 'spotify',
         result: session.result,
         selectedPlaylists: new Set(session.selectedPlaylists),
         selectedSongs: new Set(session.selectedSongs),

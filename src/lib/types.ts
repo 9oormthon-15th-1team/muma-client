@@ -35,25 +35,32 @@ export interface MelonTrackRequest {
   melon_song_url: string
 }
 
-/** preview 응답: 멜론 곡 1개에 매칭된 Spotify 후보 트랙 */
-export interface SpotifyTrack {
+/** 이전 대상 플랫폼 */
+export type TargetPlatform = 'spotify' | 'ytmusic'
+
+/**
+ * preview 응답: 멜론 곡 1개에 매칭된 대상 플랫폼 후보 트랙.
+ * Spotify/YouTube preview가 같은 필드명을 쓴다 — YouTube는 id=videoId, artists=[{name: 채널/아티스트명}].
+ */
+export interface TrackCandidate {
   id: string
   name: string
-  duration_ms: number
-  explicit: boolean
+  duration_ms?: number
+  explicit?: boolean
   popularity?: number
   artists: { id: string; name: string }[]
-  album: {
+  album?: {
     id: string
     name: string
     release_date?: string
     images?: { url: string; height: number; width: number }[]
   }
+  thumbnail_url?: string
 }
 
-/** preview 응답 1행: 요청 곡 정보 + Spotify 후보 목록(상위 N개) */
+/** preview 응답 1행: 요청 곡 정보 + 대상 플랫폼 후보 목록(상위 N개) */
 export interface MelonTrackResult extends MelonTrackRequest {
-  results: SpotifyTrack[]
+  results: TrackCandidate[]
 }
 
 /** Spotify 플레이리스트 내보내기 요청 본문 */
@@ -68,6 +75,21 @@ export interface ExportToSpotifyRequest {
 }
 
 export type ExportToSpotifyResponse =
+  | { ok: true }
+  | { ok: false; error: string }
+
+/** YouTube 플레이리스트 내보내기 요청 본문 */
+export interface YoutubeExportRequest {
+  playlist_name: string
+  video_ids: string[]
+}
+
+export interface ExportToYoutubeRequest {
+  type: 'EXPORT_TO_YOUTUBE'
+  payload: YoutubeExportRequest
+}
+
+export type ExportToYoutubeResponse =
   | { ok: true }
   | { ok: false; error: string }
 
@@ -88,12 +110,28 @@ export interface SpotifyLogoutRequest {
   type: 'SPOTIFY_LOGOUT'
 }
 
+export interface YoutubeLoginRequest {
+  type: 'YOUTUBE_LOGIN'
+}
+
+export interface YoutubeStatusRequest {
+  type: 'YOUTUBE_STATUS'
+}
+
+export interface YoutubeLogoutRequest {
+  type: 'YOUTUBE_LOGOUT'
+}
+
 export type BackgroundRequest =
   | PingRequest
   | ExportToSpotifyRequest
   | SpotifyLoginRequest
   | SpotifyStatusRequest
   | SpotifyLogoutRequest
+  | ExportToYoutubeRequest
+  | YoutubeLoginRequest
+  | YoutubeStatusRequest
+  | YoutubeLogoutRequest
 
 /** 백그라운드 → 팝업 */
 export interface PongResponse {
@@ -111,6 +149,19 @@ export interface SpotifyStatusResponse {
 }
 
 export type SpotifyLogoutResponse =
+  | { success: true }
+  | { success: false; error?: string }
+
+/** YOUTUBE_LOGIN 응답 */
+export type YoutubeTokenResponse =
+  | { success: true; accessToken: string }
+  | { success: false; error?: string }
+
+export interface YoutubeStatusResponse {
+  loggedIn: boolean
+}
+
+export type YoutubeLogoutResponse =
   | { success: true }
   | { success: false; error?: string }
 

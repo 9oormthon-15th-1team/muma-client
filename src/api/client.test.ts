@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { MelonTrackRequest } from '../lib/types'
-import { exportToSpotify, previewMelonTracks } from './client'
+import {
+  exportToSpotify,
+  exportToYoutube,
+  previewMelonTracks,
+  previewYoutubeTracks,
+} from './client'
 
 const tracks: MelonTrackRequest[] = [
   {
@@ -82,6 +87,55 @@ describe('exportToSpotify', () => {
       body: JSON.stringify({
         playlist_name: 'My Muma Playlist',
         track_ids: ['spotify:track:1', 'spotify:track:2'],
+      }),
+      signal: expect.any(AbortSignal),
+    })
+  })
+})
+
+describe('previewYoutubeTracks', () => {
+  test('멜론 트랙 배열을 JSON 전송하고 YouTube 매칭 결과(data)를 반환한다', async () => {
+    const data = [{ melon_song_id: '1', results: [] }]
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ meta: { code: 'OK' }, data }),
+    })
+    vi.stubGlobal('fetch', fetch)
+
+    const response = await previewYoutubeTracks(tracks)
+
+    expect(response).toEqual(data)
+    expect(fetch).toHaveBeenCalledWith('https://api.example.test/api/youtube/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tracks),
+      signal: expect.any(AbortSignal),
+    })
+  })
+})
+
+describe('exportToYoutube', () => {
+  test('YouTube 토큰 헤더와 선택 곡을 전송한다', async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ meta: { code: 'OK' } }),
+    })
+    vi.stubGlobal('fetch', fetch)
+
+    await exportToYoutube('youtube-token', {
+      playlist_name: 'My Muma Playlist',
+      video_ids: ['v1', 'v2'],
+    })
+
+    expect(fetch).toHaveBeenCalledWith('https://api.example.test/api/youtube/export', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Muma-Youtube-Token': 'youtube-token',
+      },
+      body: JSON.stringify({
+        playlist_name: 'My Muma Playlist',
+        video_ids: ['v1', 'v2'],
       }),
       signal: expect.any(AbortSignal),
     })
