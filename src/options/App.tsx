@@ -19,7 +19,7 @@ export function App() {
 
   return (
     <main className="mx-auto my-10 flex max-w-[420px] flex-col gap-4 px-5">
-      <h1 className="text-xl font-bold">Muma 설정</h1>
+      <h1 className="text-xl font-bold">muma 설정</h1>
       <label className="flex flex-col gap-1.5 text-sm">
         <span>사용자 이름</span>
         <input

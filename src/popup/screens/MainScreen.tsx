@@ -32,11 +32,11 @@ export function MainScreen({ onStart }: MainScreenProps) {
         <circle cx="433" cy="434" r="18" fill="#343A3A" />
       </svg>
 
-      {/* Top: line + MuMa branding */}
+      {/* Top: line + muma branding */}
       <div className="absolute right-[var(--spacing-20)] top-[var(--spacing-20)] flex flex-col items-end gap-[var(--spacing-4)]">
         <img src="/assets/line-top.svg" alt="" className="w-[339px]" />
         <p className="text-logo text-[var(--color-brand-primary)]">
-          MuMa
+          muma
         </p>
       </div>
 

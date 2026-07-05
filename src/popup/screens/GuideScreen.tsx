@@ -6,7 +6,7 @@ interface GuideScreenProps {
 }
 
 const STEPS = [
-  { title: '멜론 플레이리스트를 확인해요', desc: '멜론에 로그인한 상태로 MuMa에 접속해요' },
+  { title: '멜론 플레이리스트를 확인해요', desc: '멜론에 로그인한 상태로 muma에 접속해요' },
   { title: '옮길 플레이리스트를 선택해요', desc: 'Spotify로 옮길 플리를 고르고 곡 목록을 확인해요' },
   { title: 'Spotify에 플레이리스트 생성하기', desc: '플리를 생성하고 생성된 플리를 확인해요' },
 ]
@@ -26,7 +26,7 @@ function VinylIllustration() {
 export function GuideScreen({ onBack, onNext }: GuideScreenProps) {
   return (
     <ScreenLayout onBack={onBack}>
-      <ScreenHeader title="MuMa 가이드" subtitle="MuMa를 활용하기 위한 설명이에요" />
+      <ScreenHeader title="muma 가이드" subtitle="muma를 활용하기 위한 설명이에요" />
 
       <div className="flex w-full justify-center">
         <VinylIllustration />

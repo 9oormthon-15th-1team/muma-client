@@ -702,7 +702,7 @@ export function App() {
 
   return (
     <main className="w-90 p-4 font-sans">
-      <h1 className="m-0 mb-3 text-base">Muma</h1>
+      <h1 className="m-0 mb-3 text-base">muma</h1>
 
       {import.meta.env.DEV && (
         <p className="m-0 mb-2 text-[11px] text-gray-500">
