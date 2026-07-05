@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { PrimaryButton, IconPlaylist, IconSong, IconExternalLink, StatCard, ScreenLayout, ScreenHeader } from '../../components/ui'
 
 interface CompleteScreenProps {
@@ -27,8 +28,17 @@ function VinylTurntable() {
 }
 
 export function CompleteScreen({ onBack, playlistCount, songCount, totalSelected, spotifyUrl }: CompleteScreenProps) {
+  // 연타 시 탭이 여러 개 열리는 것을 방지
+  const openInFlight = useRef(false)
+
   function handleOpenSpotify() {
-    chrome.tabs.create({ url: spotifyUrl || 'https://open.spotify.com' })
+    if (openInFlight.current) return
+    openInFlight.current = true
+    void chrome.tabs
+      .create({ url: spotifyUrl || 'https://open.spotify.com' })
+      .finally(() => {
+        openInFlight.current = false
+      })
   }
 
   return (

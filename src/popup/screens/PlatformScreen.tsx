@@ -6,6 +6,8 @@ type Platform = 'spotify' | 'ytmusic' | null
 interface PlatformScreenProps {
   onBack: () => void
   onNext: (platform: 'spotify' | 'ytmusic') => void
+  /** OAuth 등 다음 단계 진행 중 — 버튼에 스피너를 띄우고 중복 클릭을 막는다 */
+  loading?: boolean
 }
 
 const PLATFORMS = [
@@ -31,7 +33,7 @@ function VinylTurntable() {
   )
 }
 
-export function PlatformScreen({ onBack, onNext }: PlatformScreenProps) {
+export function PlatformScreen({ onBack, onNext, loading = false }: PlatformScreenProps) {
   const [selected, setSelected] = useState<Platform>(null)
 
   return (
@@ -49,7 +51,12 @@ export function PlatformScreen({ onBack, onNext }: PlatformScreenProps) {
 
       <div className="flex-1" />
 
-      <PrimaryButton variant={selected ? 'primary' : 'disabled'} disabled={!selected} onClick={() => selected && onNext(selected)}>
+      <PrimaryButton
+        variant={selected ? 'primary' : 'disabled'}
+        disabled={!selected}
+        loading={loading}
+        onClick={() => selected && onNext(selected)}
+      >
         다음
       </PrimaryButton>
     </ScreenLayout>

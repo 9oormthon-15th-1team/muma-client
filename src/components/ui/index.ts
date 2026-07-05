@@ -4,3 +4,4 @@ export { IconBack, IconArrow, IconPlaylist, IconSong, IconExternalLink } from '.
 export { ScreenLayout, ScreenHeader } from './ScreenLayout'
 export { StatCard, PlatformCard } from './Card'
 export { SelectionBadge } from './SelectionBadge'
+export { SnackbarProvider, useSnackbar } from './Snackbar'

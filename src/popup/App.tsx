@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import type {
   CheckMelonSessionResponse,
   MelonSessionResult,
@@ -26,6 +26,7 @@ import {
   spotifyLogout,
 } from './backgroundMessages'
 import { extractFromMelon, openMelonLogin, openMyMusicPlaylists } from './melonExtraction'
+import { useSnackbar } from '../components/ui'
 import { MainScreen } from './screens/MainScreen'
 import { GuideScreen } from './screens/GuideScreen'
 import { LoadingScreen } from './screens/LoadingScreen'
@@ -236,6 +237,14 @@ export function App() {
   const [spotifyLoading, setSpotifyLoading] = useState(false)
   const [spotifyError, setSpotifyError] = useState<string | null>(null)
 
+  const { showSnackbar } = useSnackbar()
+
+  // 연타로 인한 중복 실행 방지 가드 — state는 리렌더 전 클릭을 못 막으므로 ref를 쓴다.
+  const extractInFlight = useRef(false)
+  const matchInFlight = useRef(false)
+  const exportInFlight = useRef(false)
+  const spotifyLoginInFlight = useRef(false)
+
   // 팝업 재오픈 시 chrome.storage.session에서 진행 상태 복원 (#10).
   // 복원이 끝나기 전에는 화면을 그리지 않아 main 화면이 잠깐 보이는 깜빡임을 막는다.
   const [restored, setRestored] = useState(false)
@@ -336,56 +345,61 @@ export function App() {
   }, [screen, preview, uploading])
 
   async function handleExtract() {
-    dispatch({ type: 'EXTRACT_STARTED' })
+    if (extractInFlight.current) return
+    extractInFlight.current = true
+    try {
+      dispatch({ type: 'EXTRACT_STARTED' })
 
-    // 로그인(쿠키)이 없으면 데이터를 가져올 수 없으므로 멜론 로그인 페이지로 보낸다.
-    if (!memberKey) {
-      dispatch({ type: 'EXTRACT_ABORTED' })
-      setSession({ status: 'LOGGED_OUT' })
-      await openMelonLogin(true)
-      return
-    }
-
-    const outcome = await extractFromMelon(memberKey)
-    if (outcome.ok) {
-      dispatch({ type: 'EXTRACT_SUCCEEDED', result: outcome.result })
-      setSession({ status: 'LOGGED_IN', playlistCount: outcome.result.playlists.length })
-      return
-    }
-
-    // 선언된 추출 에러 코드 → 사용자 안내 문구·세션 상태 매핑
-    switch (outcome.code) {
-      case 'NOT_LOGGED_IN':
-        dispatch({ type: 'EXTRACT_FAILED', error: '멜론에 로그인 후 다시 시도해주세요.' })
+      // 로그인(쿠키)이 없으면 데이터를 가져올 수 없으므로 멜론 로그인 페이지로 보낸다.
+      if (!memberKey) {
+        dispatch({ type: 'EXTRACT_ABORTED' })
         setSession({ status: 'LOGGED_OUT' })
-        break
-      case 'PLAYLIST_NOT_FOUND':
-        dispatch({
-          type: 'EXTRACT_FAILED',
-          error: '플레이리스트를 찾지 못했습니다. 멜론에 로그인한 계정인지 확인해주세요.',
-        })
-        setSession({ status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 })
-        break
-      case 'TAB_OPEN_FAILED':
-        dispatch({ type: 'EXTRACT_FAILED', error: '멜론 탭을 열 수 없어요. 다시 시도해주세요.' })
-        break
-      case 'PAGE_LOAD_FAILED':
-        dispatch({
-          type: 'EXTRACT_FAILED',
-          error: '멜론 페이지를 불러오지 못했어요. 잠시 후 다시 시도해주세요.',
-        })
-        break
-      case 'CONTENT_ERROR':
-        dispatch({ type: 'EXTRACT_FAILED', error: `추출 실패: ${outcome.message}` })
-        break
-      case 'UNKNOWN':
-        dispatch({ type: 'EXTRACT_FAILED', error: outcome.message ?? '알 수 없는 오류' })
-        break
+        await openMelonLogin(true)
+        return
+      }
+
+      const outcome = await extractFromMelon(memberKey)
+      if (outcome.ok) {
+        dispatch({ type: 'EXTRACT_SUCCEEDED', result: outcome.result })
+        setSession({ status: 'LOGGED_IN', playlistCount: outcome.result.playlists.length })
+        return
+      }
+
+      // 선언된 추출 에러 코드 → 사용자 안내 문구·세션 상태 매핑
+      let errorMessage: string
+      switch (outcome.code) {
+        case 'NOT_LOGGED_IN':
+          errorMessage = '멜론에 로그인 후 다시 시도해주세요.'
+          setSession({ status: 'LOGGED_OUT' })
+          break
+        case 'PLAYLIST_NOT_FOUND':
+          errorMessage = '플레이리스트를 찾지 못했습니다. 멜론에 로그인한 계정인지 확인해주세요.'
+          setSession({ status: 'PLAYLIST_IDS_NOT_FOUND', playlistCount: 0 })
+          break
+        case 'TAB_OPEN_FAILED':
+          errorMessage = '멜론 탭을 열 수 없어요. 다시 시도해주세요.'
+          break
+        case 'PAGE_LOAD_FAILED':
+          errorMessage = '멜론 페이지를 불러오지 못했어요. 잠시 후 다시 시도해주세요.'
+          break
+        case 'CONTENT_ERROR':
+          errorMessage = `추출 실패: ${outcome.message}`
+          break
+        case 'UNKNOWN':
+          errorMessage = outcome.message ?? '알 수 없는 오류'
+          break
+      }
+      dispatch({ type: 'EXTRACT_FAILED', error: errorMessage })
+      showSnackbar(errorMessage)
+    } finally {
+      extractInFlight.current = false
     }
   }
 
   async function handleUpload() {
     if (!result || chosenPlaylists.length === 0) return
+    if (matchInFlight.current) return
+    matchInFlight.current = true
     dispatch({ type: 'MATCH_STARTED' })
     try {
       // 선택한 플레이리스트의 선택한 곡만 preview를 클라이언트에서 병렬 요청하고 결과를 병합한다.
@@ -414,11 +428,16 @@ export function App() {
           type: 'MATCH_FAILED',
           error: reason instanceof Error ? reason.message : String(reason ?? '매칭 결과가 없습니다.'),
         })
+        showSnackbar('곡 매칭에 실패했어요. 잠시 후 다시 시도해주세요.')
       } else {
         dispatch({ type: 'MATCH_SUCCEEDED', preview: merged, failedCount })
+        if (failedCount > 0) showSnackbar(`플레이리스트 ${failedCount}개는 매칭에 실패했어요.`)
       }
     } catch (e) {
       dispatch({ type: 'MATCH_FAILED', error: e instanceof Error ? e.message : String(e) })
+      showSnackbar('곡 매칭에 실패했어요. 잠시 후 다시 시도해주세요.')
+    } finally {
+      matchInFlight.current = false
     }
   }
 
@@ -450,6 +469,8 @@ export function App() {
 
   async function handleExport(selectionOverride?: Record<string, string>) {
     if (!preview || previewGroups.length === 0) return
+    if (exportInFlight.current) return
+    exportInFlight.current = true
 
     // review 화면에서 막 확정한 선택은 dispatch 직후라 state 반영 전이므로 인자로 우선 사용한다.
     const sel = selectionOverride ?? selected
@@ -457,12 +478,15 @@ export function App() {
     const jobs = buildPlaylistExportJobs(previewGroups, sel)
     // 잡이 있는 플레이리스트는 exporting, 없는 건 skipped 로 초기화된다.
     dispatch({ type: 'EXPORT_STARTED', jobs })
-    if (jobs.length === 0) return
+    if (jobs.length === 0) {
+      exportInFlight.current = false
+      return
+    }
 
     try {
       // 수집한 잡을 병렬 전송한다. 각 잡은 완료 즉시 해당 플레이리스트 상태만 갱신하며,
       // 한 플레이리스트의 실패가 다른 플레이리스트의 성공/실패 표시를 가리지 않는다.
-      await Promise.all(
+      const results = await Promise.all(
         jobs.map(async (job) => {
           try {
             const res = await requestSpotifyExport(job.payload)
@@ -473,24 +497,33 @@ export function App() {
                 playlistSeq: job.playlistSeq,
                 exportedCount: job.payload.track_ids.length,
               })
-            } else {
-              dispatch({ type: 'EXPORT_JOB_FAILED', playlistSeq: job.playlistSeq, error: res.error })
+              return true
             }
+            dispatch({ type: 'EXPORT_JOB_FAILED', playlistSeq: job.playlistSeq, error: res.error })
+            return false
           } catch (e) {
             dispatch({
               type: 'EXPORT_JOB_FAILED',
               playlistSeq: job.playlistSeq,
               error: e instanceof Error ? e.message : String(e),
             })
+            return false
           }
         }),
       )
+      const failedJobCount = results.filter((ok) => !ok).length
+      if (failedJobCount > 0) {
+        showSnackbar(`플레이리스트 ${failedJobCount}개 내보내기에 실패했어요.`)
+      }
     } finally {
+      exportInFlight.current = false
       dispatch({ type: 'EXPORT_FINISHED' })
     }
   }
 
   const handleSpotifyLogin = () => {
+    if (spotifyLoginInFlight.current) return
+    spotifyLoginInFlight.current = true
     setSpotifyLoading(true)
     setSpotifyError(null)
     spotifyLogin()
@@ -502,7 +535,43 @@ export function App() {
         }
       })
       .catch((e: unknown) => setSpotifyError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setSpotifyLoading(false))
+      .finally(() => {
+        spotifyLoginInFlight.current = false
+        setSpotifyLoading(false)
+      })
+  }
+
+  // PlatformScreen에서 플랫폼 확정 시: Spotify 로그인 상태를 확인하고 매칭으로 진행한다.
+  // OAuth 진행 중 연타는 ref 가드 + 버튼 loading으로 이중 차단한다.
+  function handlePlatformNext(platform: 'spotify' | 'ytmusic') {
+    if (platform !== 'spotify') return
+    if (spotifyLoggedIn) {
+      dispatch({ type: 'PLATFORM_CONFIRMED' })
+      void handleUpload()
+      return
+    }
+    if (spotifyLoginInFlight.current) return
+    spotifyLoginInFlight.current = true
+    setSpotifyLoading(true)
+    spotifyLogin()
+      .then((res) => {
+        if (res.success) {
+          setSpotifyLoggedIn(true)
+          dispatch({ type: 'PLATFORM_CONFIRMED' })
+          void handleUpload()
+        } else {
+          setSpotifyError(res.error ?? 'Login failed')
+          showSnackbar('Spotify 로그인에 실패했어요. 다시 시도해주세요.')
+        }
+      })
+      .catch((e: unknown) => {
+        setSpotifyError(e instanceof Error ? e.message : String(e))
+        showSnackbar('Spotify 로그인에 실패했어요. 다시 시도해주세요.')
+      })
+      .finally(() => {
+        spotifyLoginInFlight.current = false
+        setSpotifyLoading(false)
+      })
   }
 
   const handleSpotifyLogout = () => {
@@ -618,32 +687,8 @@ export function App() {
     return (
       <PlatformScreen
         onBack={() => dispatch({ type: 'BACK' })}
-        onNext={(platform) => {
-          if (platform === 'spotify') {
-            // Spotify 로그인 확인 후 매칭 시작
-            if (spotifyLoggedIn) {
-              dispatch({ type: 'PLATFORM_CONFIRMED' })
-              void handleUpload()
-            } else {
-              // OAuth 로그인 트리거 → 성공 시 매칭 진행
-              setSpotifyLoading(true)
-              spotifyLogin()
-                .then((res) => {
-                  if (res.success) {
-                    setSpotifyLoggedIn(true)
-                    dispatch({ type: 'PLATFORM_CONFIRMED' })
-                    void handleUpload()
-                  } else {
-                    setSpotifyError(res.error ?? 'Login failed')
-                  }
-                })
-                .catch((e: unknown) =>
-                  setSpotifyError(e instanceof Error ? e.message : String(e)),
-                )
-                .finally(() => setSpotifyLoading(false))
-            }
-          }
-        }}
+        onNext={handlePlatformNext}
+        loading={spotifyLoading}
       />
     )
   }
